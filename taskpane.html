@@ -330,8 +330,8 @@
     </div>
     <p class="form-hint">
       Dates calendaires : <code>{{date}}</code>, <code>{{demain}}</code>, <code>{{hier}}</code><br/>
-      Jours ouvrés (week-ends ignorés) : <code>{{joursouvres+N}}</code> — ex: <code>{{joursouvres+2}}</code>
-      un jeudi donne le lundi suivant, pas le samedi. Fonctionne aussi en négatif : <code>{{joursouvres-3}}</code>.<br/>
+      Jours ouvrés (week-ends ignorés) : <code>{{jo+N}}</code> — ex: <code>{{jo+2}}</code>
+      un jeudi donne le lundi suivant, pas le samedi. Fonctionne aussi en négatif : <code>{{jo-3}}</code>.<br/>
       Le bouton 📅 insère une date précise de ton choix (fixe, pas recalculée) à l'endroit du curseur.<br/>
       Format JJ/MM/AAAA, remplacé automatiquement à chaque insertion.
     </p>
@@ -412,8 +412,8 @@
       return offsetDateStr(parseInt(offset, 10));
     });
 
-    // {{joursouvres+N}} / {{joursouvres-N}} : décalage en jours ouvrés, week-ends ignorés
-    result = result.replace(/\{\{joursouvres([+-]\d+)\}\}/g, (match, offset) => {
+    // {{jo+N}} / {{jo-N}} : décalage en jours ouvrés, week-ends ignorés
+    result = result.replace(/\{\{jo([+-]\d+)\}\}/g, (match, offset) => {
       return businessDayOffsetStr(parseInt(offset, 10));
     });
 
