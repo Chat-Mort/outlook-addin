@@ -92,33 +92,55 @@
     border: 1px solid var(--line);
     border-radius: 8px;
     background: var(--card);
-    padding: 10px 12px;
+    padding: 8px 10px;
     margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color 0.12s ease;
   }
+  .template:hover { border-color: var(--accent); }
+  .template:active { background: var(--accent-soft); }
   .template-top {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     gap: 8px;
   }
   .template-name {
     font-weight: 600;
-    margin: 0 0 2px;
+    margin: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .template-icon-btn {
+    flex: 0 0 auto;
+    padding: 4px 7px;
+    font-size: 13px;
+    line-height: 1;
+    border-radius: 5px;
   }
   .template-preview {
     color: var(--ink-soft);
     font-size: 12px;
-    margin: 0;
+    margin: 4px 0 0;
     max-height: 2.6em;
     overflow: hidden;
   }
-  .template-actions {
+  .template-meta {
     display: flex;
-    gap: 4px;
-    margin-top: 8px;
+    gap: 6px;
+    margin-top: 4px;
     flex-wrap: wrap;
   }
-  .template-actions button { padding: 5px 8px; font-size: 12px; }
+  .template-badge {
+    font-size: 10.5px;
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
 
   .empty {
     color: var(--ink-soft);
@@ -180,6 +202,87 @@
     margin-top: 12px;
   }
 
+  /* Pièces jointes */
+  .attach-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .attach-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 5px;
+    padding: 3px 6px 3px 8px;
+    max-width: 100%;
+  }
+  .attach-chip span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 160px;
+  }
+  .attach-chip button {
+    border: none;
+    background: none;
+    padding: 0 2px;
+    font-size: 12px;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .attach-hint {
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-top: 4px;
+  }
+
+  /* Bouton + popover calendrier dans le formulaire */
+  .field-with-calendar {
+    position: relative;
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+  }
+  .field-with-calendar > *:first-child { flex: 1 1 auto; }
+  .btn-calendar {
+    flex: 0 0 auto;
+    padding: 6px 8px;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .calendar-popover {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 20;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 200px;
+  }
+  .calendar-popover input[type="date"] {
+    width: 100%;
+    font-family: inherit;
+    font-size: 13px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 8px;
+    color: var(--ink);
+    background: var(--card);
+  }
+  [data-theme="dark"] .calendar-popover input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
+
   .hidden { display: none !important; }
 </style>
 </head>
@@ -215,20 +318,45 @@
     <input id="fBcc" type="text" placeholder="ex: archive@monentreprise.com" />
 
     <label for="fSubject">Objet du mail</label>
-    <input id="fSubject" type="text" placeholder="Ex: Réservation transport - {{date}}" />
+    <div class="field-with-calendar">
+      <input id="fSubject" type="text" placeholder="Ex: Réservation transport - {{date}}" />
+      <button type="button" class="btn-calendar" data-target="fSubject" title="Insérer une date précise choisie sur un calendrier">📅</button>
+    </div>
 
     <label for="fBody">Corps du mail</label>
-    <textarea id="fBody" placeholder="Bonjour,&#10;&#10;Merci de confirmer l'enlèvement du {{date}}.&#10;&#10;Cordialement,"></textarea>
+    <div class="field-with-calendar">
+      <textarea id="fBody" placeholder="Bonjour,&#10;&#10;Merci de confirmer l'enlèvement du {{date}}.&#10;&#10;Cordialement,"></textarea>
+      <button type="button" class="btn-calendar" data-target="fBody" title="Insérer une date précise choisie sur un calendrier">📅</button>
+    </div>
     <p class="form-hint">
       Dates calendaires : <code>{{date}}</code>, <code>{{demain}}</code>, <code>{{hier}}</code><br/>
       Jours ouvrés (week-ends ignorés) : <code>{{joursouvres+N}}</code> — ex: <code>{{joursouvres+2}}</code>
       un jeudi donne le lundi suivant, pas le samedi. Fonctionne aussi en négatif : <code>{{joursouvres-3}}</code>.<br/>
+      Le bouton 📅 insère une date précise de ton choix (fixe, pas recalculée) à l'endroit du curseur.<br/>
       Format JJ/MM/AAAA, remplacé automatiquement à chaque insertion.
+    </p>
+
+    <label>Pièces jointes — facultatif</label>
+    <input type="file" id="fAttachments" multiple />
+    <div id="attachList" class="attach-row" style="margin-top: 6px;"></div>
+    <p class="attach-hint">
+      Ajoutées automatiquement si tu insères le modèle dans un mail déjà ouvert. Si le modèle crée un
+      nouveau mail depuis ta boîte de réception, il faudra les rajouter à la main (limite technique
+      d'Outlook, pas quelque chose qu'on peut contourner).
     </p>
 
     <div class="form-actions">
       <button class="ghost" id="btnCancel">Annuler</button>
       <button class="primary" id="btnSave">Enregistrer</button>
+    </div>
+  </div>
+
+  <!-- Popover calendrier, positionné dynamiquement au clic sur un bouton 📅 -->
+  <div id="calendarPopover" class="calendar-popover hidden">
+    <input type="date" id="calendarPopoverInput" />
+    <div style="display:flex; justify-content:flex-end; gap:6px;">
+      <button class="ghost" id="calendarPopoverCancel" style="padding:5px 8px; font-size:12px;">Annuler</button>
+      <button class="primary" id="calendarPopoverInsert" style="padding:5px 8px; font-size:12px;">Insérer</button>
     </div>
   </div>
 </main>
@@ -239,6 +367,8 @@
   const STORAGE_KEY = "modeles_pro_templates_v1";
   let templates = [];
   let editingId = null;
+  let formAttachments = [];
+  let lastFocusedFieldId = "fBody";
 
   function pad(n) { return String(n).padStart(2, "0"); }
 
@@ -321,31 +451,39 @@
     }
     empty.classList.add("hidden");
 
-    const insertLabel = isComposeMode() ? "Insérer dans le mail" : "Créer un nouveau mail";
-
     templates.forEach((t) => {
       const card = document.createElement("div");
       card.className = "template";
+      card.title = isComposeMode() ? "Cliquer pour insérer dans le mail" : "Cliquer pour créer un nouveau mail";
       card.innerHTML = `
         <div class="template-top">
-          <div>
-            <p class="template-name"></p>
-            <p class="template-preview"></p>
-          </div>
+          <p class="template-name"></p>
+          <button class="template-icon-btn btn-edit" title="Modifier">✎</button>
+          <button class="template-icon-btn danger btn-delete" title="Supprimer">🗑</button>
         </div>
-        <div class="template-actions">
-          <button class="primary btn-insert"></button>
-          <button class="btn-edit">Modifier</button>
-          <button class="danger btn-delete">Supprimer</button>
-        </div>
+        <p class="template-preview"></p>
       `;
       card.querySelector(".template-name").textContent = t.name;
       card.querySelector(".template-preview").textContent = t.subject || (t.body || "").slice(0, 80);
-      card.querySelector(".btn-insert").textContent = insertLabel;
 
-      card.querySelector(".btn-insert").addEventListener("click", () => insertTemplate(t));
-      card.querySelector(".btn-edit").addEventListener("click", () => openForm(t));
-      card.querySelector(".btn-delete").addEventListener("click", () => deleteTemplate(t.id));
+      if (t.attachments && t.attachments.length > 0) {
+        const meta = document.createElement("div");
+        meta.className = "template-meta";
+        const badge = document.createElement("span");
+        badge.className = "template-badge";
+        badge.textContent = `📎 ${t.attachments.length}`;
+        meta.appendChild(badge);
+        card.appendChild(meta);
+      }
+
+      // Toute la carte est cliquable pour insérer le modèle...
+      card.addEventListener("click", () => insertTemplate(t));
+
+      // ...sauf les icônes modifier/supprimer, qui ne doivent pas déclencher l'insertion.
+      const editBtn = card.querySelector(".btn-edit");
+      const deleteBtn = card.querySelector(".btn-delete");
+      editBtn.addEventListener("click", (e) => { e.stopPropagation(); openForm(t); });
+      deleteBtn.addEventListener("click", (e) => { e.stopPropagation(); deleteTemplate(t.id); });
 
       list.appendChild(card);
     });
@@ -359,6 +497,9 @@
     document.getElementById("fBcc").value = t ? (t.bcc || "") : "";
     document.getElementById("fSubject").value = t ? t.subject : "";
     document.getElementById("fBody").value = t ? t.body : "";
+    formAttachments = t && t.attachments ? t.attachments.slice() : [];
+    document.getElementById("fAttachments").value = "";
+    renderAttachList();
     document.getElementById("form").classList.remove("hidden");
     document.getElementById("fName").focus();
   }
@@ -366,6 +507,40 @@
   function closeForm() {
     document.getElementById("form").classList.add("hidden");
     editingId = null;
+    formAttachments = [];
+  }
+
+  function renderAttachList() {
+    const box = document.getElementById("attachList");
+    box.innerHTML = "";
+    formAttachments.forEach((a, index) => {
+      const chip = document.createElement("div");
+      chip.className = "attach-chip";
+      chip.innerHTML = `<span></span><button type="button" title="Retirer">✕</button>`;
+      chip.querySelector("span").textContent = a.name;
+      chip.querySelector("button").addEventListener("click", () => {
+        formAttachments.splice(index, 1);
+        renderAttachList();
+      });
+      box.appendChild(chip);
+    });
+  }
+
+  function handleAttachmentPick(fileList) {
+    const files = Array.from(fileList || []);
+    let pending = files.length;
+    if (pending === 0) return;
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        // reader.result est "data:<mime>;base64,<data>" — on ne garde que la partie utile
+        const base64 = String(reader.result).split(",")[1] || "";
+        formAttachments.push({ name: file.name, base64 });
+        renderAttachList();
+      };
+      reader.onerror = () => setStatus(`Impossible de lire le fichier « ${file.name} ».`, true);
+      reader.readAsDataURL(file);
+    });
   }
 
   function saveForm() {
@@ -380,9 +555,9 @@
 
     if (editingId) {
       const t = templates.find((x) => x.id === editingId);
-      if (t) { t.name = name; t.to = to; t.cc = cc; t.bcc = bcc; t.subject = subject; t.body = body; }
+      if (t) { t.name = name; t.to = to; t.cc = cc; t.bcc = bcc; t.subject = subject; t.body = body; t.attachments = formAttachments.slice(); }
     } else {
-      templates.push({ id: Date.now().toString(), name, to, cc, bcc, subject, body });
+      templates.push({ id: Date.now().toString(), name, to, cc, bcc, subject, body, attachments: formAttachments.slice() });
     }
     saveTemplates();
     renderList();
@@ -417,13 +592,16 @@
     const toList = parseRecipients(t.to);
     const ccList = parseRecipients(t.cc);
     const bccList = parseRecipients(t.bcc);
+    const attachments = t.attachments || [];
 
     if (isComposeMode()) {
-      // Un mail est déjà ouvert en rédaction : on remplit ce mail-là.
-      insertIntoOpenDraft(subject, bodyHtml, toList, ccList, bccList, t.name);
+      // Un mail est déjà ouvert en rédaction : on remplit ce mail-là (pièces jointes incluses).
+      insertIntoOpenDraft(subject, bodyHtml, toList, ccList, bccList, attachments, t.name);
     } else {
       // Aucun mail en cours de rédaction (tu es dans ta boîte de réception) :
       // on crée directement un nouveau mail entièrement pré-rempli.
+      // Limite technique d'Outlook : les pièces jointes stockées localement ne peuvent pas être
+      // ajoutées automatiquement à un mail créé de cette façon (seulement à un brouillon déjà ouvert).
       Office.context.mailbox.displayNewMessageForm({
         toRecipients: toList,
         ccRecipients: ccList,
@@ -431,11 +609,15 @@
         subject: subject,
         htmlBody: bodyHtml
       });
-      setStatus(`Nouveau mail créé depuis « ${t.name} ».`);
+      if (attachments.length > 0) {
+        setStatus(`Nouveau mail créé depuis « ${t.name} » — ajoute les ${attachments.length} pièce(s) jointe(s) à la main.`);
+      } else {
+        setStatus(`Nouveau mail créé depuis « ${t.name} ».`);
+      }
     }
   }
 
-  function insertIntoOpenDraft(subject, bodyHtml, toList, ccList, bccList, name) {
+  function insertIntoOpenDraft(subject, bodyHtml, toList, ccList, bccList, attachments, name) {
     const item = Office.context.mailbox.item;
 
     const setField = (field, value) => new Promise((resolve, reject) => {
@@ -459,12 +641,30 @@
       );
     });
 
+    const addAttachments = () => {
+      // Ajoutées une par une, dans l'ordre, pour éviter de surcharger l'API
+      return attachments.reduce((chain, a) => {
+        return chain.then(() => new Promise((resolve, reject) => {
+          item.addFileAttachmentFromBase64Async(
+            a.base64,
+            a.name,
+            { isInline: false },
+            (res) => {
+              if (res.status === Office.AsyncResultStatus.Succeeded) resolve();
+              else reject(res.error);
+            }
+          );
+        }));
+      }, Promise.resolve());
+    };
+
     setField(item.subject, subject)
       .then(() => setField(item.to, toList))
       .then(() => setField(item.cc, ccList))
       .then(() => setField(item.bcc, bccList))
       .then(setBody)
-      .then(() => setStatus(`Modèle « ${name} » inséré.`))
+      .then(addAttachments)
+      .then(() => setStatus(`Modèle « ${name} » inséré${attachments.length ? ` (${attachments.length} pièce(s) jointe(s))` : ""}.`))
       .catch((err) => setStatus("Erreur à l'insertion : " + (err ? err.message : "inconnue"), true));
   }
 
@@ -490,6 +690,17 @@
     document.body.setAttribute("data-theme", isDark ? "dark" : "light");
   }
 
+  // Insère du texte à l'endroit du curseur dans un champ texte/textarea, en remplaçant
+  // la sélection en cours s'il y en a une.
+  function insertAtCursor(fieldEl, text) {
+    const start = fieldEl.selectionStart ?? fieldEl.value.length;
+    const end = fieldEl.selectionEnd ?? fieldEl.value.length;
+    fieldEl.value = fieldEl.value.slice(0, start) + text + fieldEl.value.slice(end);
+    const newPos = start + text.length;
+    fieldEl.focus();
+    fieldEl.setSelectionRange(newPos, newPos);
+  }
+
   Office.onReady(() => {
     loadTemplates();
     renderList();
@@ -498,6 +709,48 @@
     document.getElementById("btnNew").addEventListener("click", () => openForm(null));
     document.getElementById("btnCancel").addEventListener("click", closeForm);
     document.getElementById("btnSave").addEventListener("click", saveForm);
+
+    document.getElementById("fAttachments").addEventListener("change", (e) => {
+      handleAttachmentPick(e.target.files);
+    });
+
+    // Retient quel champ (objet ou corps) avait le focus, pour savoir où insérer la date choisie
+    ["fSubject", "fBody"].forEach((id) => {
+      document.getElementById(id).addEventListener("focus", () => { lastFocusedFieldId = id; });
+    });
+
+    // Bouton 📅 sur l'objet et sur le corps : ouvre le popover calendrier
+    const popover = document.getElementById("calendarPopover");
+    const popoverInput = document.getElementById("calendarPopoverInput");
+    let calendarTargetId = "fBody";
+
+    document.querySelectorAll(".btn-calendar").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        calendarTargetId = btn.dataset.target;
+        popoverInput.valueAsDate = new Date();
+        popover.classList.remove("hidden");
+        // Positionne le popover juste sous le bouton cliqué
+        const rect = btn.getBoundingClientRect();
+        const parentRect = btn.closest(".form").getBoundingClientRect();
+        popover.style.top = (rect.bottom - parentRect.top + document.getElementById("form").scrollTop + 4) + "px";
+        popover.style.right = "16px";
+        btn.closest(".form").appendChild(popover);
+        popover.classList.remove("hidden");
+      });
+    });
+
+    document.getElementById("calendarPopoverCancel").addEventListener("click", () => {
+      popover.classList.add("hidden");
+    });
+
+    document.getElementById("calendarPopoverInsert").addEventListener("click", () => {
+      if (!popoverInput.value) { setStatus("Choisis d'abord une date.", true); return; }
+      const [y, m, d] = popoverInput.value.split("-").map(Number);
+      const localDate = new Date(y, m - 1, d);
+      const field = document.getElementById(calendarTargetId);
+      insertAtCursor(field, formatDateFR(localDate));
+      popover.classList.add("hidden");
+    });
   });
 </script>
 
