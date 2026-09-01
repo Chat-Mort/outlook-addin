@@ -382,6 +382,8 @@
       Dates calendaires : <code>{{date}}</code>, <code>{{demain}}</code>, <code>{{hier}}</code><br/>
       Jours ouvrés (week-ends ignorés) : <code>{{jo+N}}</code> — ex: <code>{{jo+2}}</code>
       un jeudi donne le lundi suivant, pas le samedi. Fonctionne aussi en négatif : <code>{{jo-3}}</code>.<br/>
+      Numéro de semaine : <code>{{week}}</code> (semaine en cours), <code>{{week+N}}</code> / <code>{{week-N}}</code>
+      pour N semaines avant/après (ex: <code>{{week+1}}</code> = semaine prochaine).<br/>
       Le bouton 📅 insère une date précise de ton choix (fixe, pas recalculée) à l'endroit du curseur, tout de suite.<br/>
       <code>{{calendar}}</code> : demande la date au moment où <em>toi ou quelqu'un d'autre</em> utilise
       ce modèle (une fenêtre s'ouvre avec un calendrier, mois en cours, aujourd'hui en surbrillance).<br/>
@@ -467,11 +469,27 @@
     return formatDateFR(addBusinessDays(n));
   }
 
+  // Numéro de semaine ISO 8601 (1 à 52/53, lundi comme premier jour, la semaine 1 est celle
+  // qui contient le premier jeudi de l'année — c'est la norme utilisée en France/Europe).
+  function getISOWeekNumber(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  }
+  function weekOffsetStr(n) {
+    const d = new Date();
+    d.setDate(d.getDate() + n * 7); // décalage en SEMAINES, pas en jours
+    return String(getISOWeekNumber(d));
+  }
+
   function applyPlaceholders(text) {
     let result = text
       .replaceAll("{{date}}", todayStr())
       .replaceAll("{{demain}}", tomorrowStr())
-      .replaceAll("{{hier}}", offsetDateStr(-1));
+      .replaceAll("{{hier}}", offsetDateStr(-1))
+      .replaceAll("{{week}}", weekOffsetStr(0));
 
     // {{date+N}} / {{date-N}} : décalage calendaire classique (compte aussi les week-ends)
     result = result.replace(/\{\{date([+-]\d+)\}\}/g, (match, offset) => {
@@ -481,6 +499,11 @@
     // {{jo+N}} / {{jo-N}} : décalage en jours ouvrés, week-ends ignorés
     result = result.replace(/\{\{jo([+-]\d+)\}\}/g, (match, offset) => {
       return businessDayOffsetStr(parseInt(offset, 10));
+    });
+
+    // {{week+N}} / {{week-N}} : numéro de semaine, N semaines avant/après aujourd'hui
+    result = result.replace(/\{\{week([+-]\d+)\}\}/g, (match, offset) => {
+      return weekOffsetStr(parseInt(offset, 10));
     });
 
     return result;
