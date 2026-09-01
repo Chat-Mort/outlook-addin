@@ -88,6 +88,28 @@
     font-weight: 600;
   }
 
+  .sort-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .sort-row label {
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    flex: 0 0 auto;
+  }
+  .sort-row select {
+    flex: 1 1 auto;
+    font-family: inherit;
+    font-size: 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 5px 6px;
+    color: var(--ink);
+    background: var(--card);
+  }
+
   .template {
     border: 1px solid var(--line);
     border-radius: 8px;
@@ -341,6 +363,17 @@
     <button class="primary" id="btnNew">+ Nouveau</button>
   </div>
 
+  <div class="sort-row">
+    <label for="sortSelect">Trier par</label>
+    <select id="sortSelect">
+      <option value="alpha">Ordre alphabétique</option>
+      <option value="created-desc">Création (plus récent)</option>
+      <option value="created-asc">Création (plus ancien)</option>
+      <option value="modified-desc">Modification (plus récent)</option>
+      <option value="modified-asc">Modification (plus ancien)</option>
+    </select>
+  </div>
+
   <button id="btnResolveShortcuts" class="hidden" style="width:100%; margin-bottom: 10px; font-size:12px;"
     title="Cherche les ##raccourcis tapés dans ce mail et les remplace par le contenu du modèle correspondant">
     Traiter les raccourcis ## de ce mail
@@ -433,10 +466,12 @@
 
 <script>
   const STORAGE_KEY = "modeles_pro_templates_v1";
+  const SORT_KEY = "modeles_pro_sort_v1";
   let templates = [];
   let editingId = null;
   let formAttachments = [];
   let lastFocusedFieldId = "fBody";
+  let currentSort = "alpha";
 
   function pad(n) { return String(n).padStart(2, "0"); }
 
@@ -535,10 +570,39 @@
     } catch (e) {
       templates = [];
     }
+    // Modèles créés avant l'ajout du tri : on leur donne des dates de repli à partir
+    // de leur id (qui est un horodatage), pour que le tri fonctionne quand même.
+    let backfilled = false;
+    templates.forEach((t) => {
+      const fallback = parseInt(t.id, 10) || Date.now();
+      if (!t.createdAt) { t.createdAt = fallback; backfilled = true; }
+      if (!t.updatedAt) { t.updatedAt = t.createdAt; backfilled = true; }
+    });
+    if (backfilled) saveTemplates();
   }
 
   function saveTemplates() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
+  }
+
+  function loadSortPref() {
+    return localStorage.getItem(SORT_KEY) || "alpha";
+  }
+  function saveSortPref(value) {
+    localStorage.setItem(SORT_KEY, value);
+  }
+
+  function sortedTemplates() {
+    const list = templates.slice();
+    switch (currentSort) {
+      case "created-desc": return list.sort((a, b) => b.createdAt - a.createdAt);
+      case "created-asc": return list.sort((a, b) => a.createdAt - b.createdAt);
+      case "modified-desc": return list.sort((a, b) => b.updatedAt - a.updatedAt);
+      case "modified-asc": return list.sort((a, b) => a.updatedAt - b.updatedAt);
+      case "alpha":
+      default:
+        return list.sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
+    }
   }
 
   function setStatus(msg, isError) {
@@ -559,7 +623,7 @@
     }
     empty.classList.add("hidden");
 
-    templates.forEach((t) => {
+    sortedTemplates().forEach((t) => {
       const card = document.createElement("div");
       card.className = "template";
       card.title = isComposeMode() ? "Cliquer pour insérer dans le mail" : "Cliquer pour créer un nouveau mail";
@@ -663,11 +727,12 @@
 
     if (!name) { setStatus("Donne un nom au modèle.", true); return; }
 
+    const now = Date.now();
     if (editingId) {
       const t = templates.find((x) => x.id === editingId);
-      if (t) { t.name = name; t.shortcut = shortcut; t.to = to; t.cc = cc; t.bcc = bcc; t.subject = subject; t.body = body; t.attachments = formAttachments.slice(); }
+      if (t) { t.name = name; t.shortcut = shortcut; t.to = to; t.cc = cc; t.bcc = bcc; t.subject = subject; t.body = body; t.attachments = formAttachments.slice(); t.updatedAt = now; }
     } else {
-      templates.push({ id: Date.now().toString(), name, shortcut, to, cc, bcc, subject, body, attachments: formAttachments.slice() });
+      templates.push({ id: now.toString(), name, shortcut, to, cc, bcc, subject, body, attachments: formAttachments.slice(), createdAt: now, updatedAt: now });
     }
     saveTemplates();
     renderList();
@@ -914,12 +979,20 @@
 
   Office.onReady(() => {
     loadTemplates();
+    currentSort = loadSortPref();
+    document.getElementById("sortSelect").value = currentSort;
     renderList();
     applyOfficeTheme();
 
     document.getElementById("btnNew").addEventListener("click", () => openForm(null));
     document.getElementById("btnCancel").addEventListener("click", closeForm);
     document.getElementById("btnSave").addEventListener("click", saveForm);
+
+    document.getElementById("sortSelect").addEventListener("change", (e) => {
+      currentSort = e.target.value;
+      saveSortPref(currentSort);
+      renderList();
+    });
 
     document.getElementById("fAttachments").addEventListener("change", (e) => {
       handleAttachmentPick(e.target.files);
