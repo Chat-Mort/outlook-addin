@@ -283,6 +283,48 @@
     filter: invert(1);
   }
 
+  /* Fenêtre modale "choisis une date" affichée au moment d'insérer un modèle contenant {{calendar}} */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+  .modal-card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    width: 240px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  }
+  .modal-card h3 {
+    font-size: 13.5px;
+    margin: 0 0 10px;
+  }
+  .modal-card input[type="date"] {
+    width: 100%;
+    font-family: inherit;
+    font-size: 13px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 7px 8px;
+    color: var(--ink);
+    background: var(--card);
+  }
+  [data-theme="dark"] .modal-card input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 12px;
+  }
+
   .hidden { display: none !important; }
 </style>
 </head>
@@ -299,6 +341,11 @@
     <button class="primary" id="btnNew">+ Nouveau</button>
   </div>
 
+  <button id="btnResolveShortcuts" class="hidden" style="width:100%; margin-bottom: 10px; font-size:12px;"
+    title="Cherche les ##raccourcis tapés dans ce mail et les remplace par le contenu du modèle correspondant">
+    Traiter les raccourcis ## de ce mail
+  </button>
+
   <div id="templateList"></div>
   <div id="emptyState" class="empty hidden">
     Aucun modèle pour l'instant. Clique sur « + Nouveau » pour créer le premier.
@@ -307,6 +354,9 @@
   <div id="form" class="form hidden">
     <label for="fName">Nom du modèle</label>
     <input id="fName" type="text" placeholder="Ex: Réservation lendemain" />
+
+    <label for="fShortcut">Raccourci — facultatif</label>
+    <input id="fShortcut" type="text" placeholder="ex: signature (utilisable ailleurs via ##signature)" />
 
     <label for="fTo">Destinataires (À)</label>
     <input id="fTo" type="text" placeholder="ex: contact@client.com, autre@client.com" />
@@ -332,8 +382,12 @@
       Dates calendaires : <code>{{date}}</code>, <code>{{demain}}</code>, <code>{{hier}}</code><br/>
       Jours ouvrés (week-ends ignorés) : <code>{{jo+N}}</code> — ex: <code>{{jo+2}}</code>
       un jeudi donne le lundi suivant, pas le samedi. Fonctionne aussi en négatif : <code>{{jo-3}}</code>.<br/>
-      Le bouton 📅 insère une date précise de ton choix (fixe, pas recalculée) à l'endroit du curseur.<br/>
-      Format JJ/MM/AAAA, remplacé automatiquement à chaque insertion.
+      Le bouton 📅 insère une date précise de ton choix (fixe, pas recalculée) à l'endroit du curseur, tout de suite.<br/>
+      <code>{{calendar}}</code> : demande la date au moment où <em>toi ou quelqu'un d'autre</em> utilise
+      ce modèle (une fenêtre s'ouvre avec un calendrier, mois en cours, aujourd'hui en surbrillance).<br/>
+      Format JJ/MM/AAAA, remplacé automatiquement à chaque insertion.<br/>
+      Raccourcis : donne un raccourci à ce modèle (champ ci-dessus) pour pouvoir taper
+      <code>##raccourci</code> dans un autre modèle — il sera remplacé par le corps de celui-ci.
     </p>
 
     <label>Pièces jointes — facultatif</label>
@@ -362,6 +416,18 @@
 </main>
 
 <div id="status"></div>
+
+<!-- Modale "choisis une date" : s'ouvre au moment d'insérer un modèle contenant {{calendar}} -->
+<div id="calendarModalOverlay" class="modal-overlay hidden">
+  <div class="modal-card">
+    <h3>Choisis une date</h3>
+    <input type="date" id="calendarModalInput" />
+    <div class="modal-actions">
+      <button class="ghost" id="calendarModalCancel">Annuler</button>
+      <button class="primary" id="calendarModalConfirm">Valider</button>
+    </div>
+  </div>
+</div>
 
 <script>
   const STORAGE_KEY = "modeles_pro_templates_v1";
@@ -418,6 +484,21 @@
     });
 
     return result;
+  }
+
+  // Remplace ##raccourci par le corps du modèle correspondant, récursivement (un modèle
+  // peut inclure un autre modèle via son raccourci). maxDepth évite les boucles infinies
+  // si deux modèles se référencent l'un l'autre par erreur.
+  function resolveShortcuts(text, maxDepth) {
+    if (maxDepth === undefined) maxDepth = 5;
+    if (maxDepth <= 0) return text;
+    if (!text || text.indexOf("##") === -1) return text;
+
+    return text.replace(/##(\w+)/g, (match, key) => {
+      const found = templates.find((t) => t.shortcut && t.shortcut === key.toLowerCase());
+      if (!found) return match; // raccourci inconnu : on laisse le texte tel quel
+      return resolveShortcuts(found.body || "", maxDepth - 1);
+    });
   }
 
   function loadTemplates() {
@@ -492,6 +573,7 @@
   function openForm(t) {
     editingId = t ? t.id : null;
     document.getElementById("fName").value = t ? t.name : "";
+    document.getElementById("fShortcut").value = t ? (t.shortcut || "") : "";
     document.getElementById("fTo").value = t ? (t.to || "") : "";
     document.getElementById("fCc").value = t ? (t.cc || "") : "";
     document.getElementById("fBcc").value = t ? (t.bcc || "") : "";
@@ -545,6 +627,7 @@
 
   function saveForm() {
     const name = document.getElementById("fName").value.trim();
+    const shortcut = normalizeShortcut(document.getElementById("fShortcut").value);
     const to = document.getElementById("fTo").value.trim();
     const cc = document.getElementById("fCc").value.trim();
     const bcc = document.getElementById("fBcc").value.trim();
@@ -555,14 +638,21 @@
 
     if (editingId) {
       const t = templates.find((x) => x.id === editingId);
-      if (t) { t.name = name; t.to = to; t.cc = cc; t.bcc = bcc; t.subject = subject; t.body = body; t.attachments = formAttachments.slice(); }
+      if (t) { t.name = name; t.shortcut = shortcut; t.to = to; t.cc = cc; t.bcc = bcc; t.subject = subject; t.body = body; t.attachments = formAttachments.slice(); }
     } else {
-      templates.push({ id: Date.now().toString(), name, to, cc, bcc, subject, body, attachments: formAttachments.slice() });
+      templates.push({ id: Date.now().toString(), name, shortcut, to, cc, bcc, subject, body, attachments: formAttachments.slice() });
     }
     saveTemplates();
     renderList();
     closeForm();
     setStatus("Modèle enregistré.");
+  }
+
+  // Nettoie ce que la personne tape dans le champ "Raccourci" : enlève les ## éventuels,
+  // les espaces, met en minuscules, pour que ##Signature et ##signature soient équivalents.
+  function normalizeShortcut(text) {
+    if (!text) return "";
+    return text.trim().replace(/^#+/, "").toLowerCase().replace(/\s+/g, "");
   }
 
   function deleteTemplate(id) {
@@ -586,9 +676,57 @@
     return !!(item && item.subject && typeof item.subject === "object");
   }
 
-  function insertTemplate(t) {
-    const subject = applyPlaceholders(t.subject || "");
-    const bodyHtml = applyPlaceholders(t.body || "").replaceAll("\n", "<br>");
+  // Ouvre la fenêtre "Choisis une date" et renvoie une Promise résolue avec la date choisie
+  // (format JJ/MM/AAAA), ou null si annulé. Le calendrier natif s'ouvre déjà sur le mois en
+  // cours avec aujourd'hui en surbrillance — comportement natif du navigateur, rien à coder pour ça.
+  function promptForCalendarDate() {
+    return new Promise((resolve) => {
+      const overlay = document.getElementById("calendarModalOverlay");
+      const input = document.getElementById("calendarModalInput");
+      const confirmBtn = document.getElementById("calendarModalConfirm");
+      const cancelBtn = document.getElementById("calendarModalCancel");
+
+      input.valueAsDate = new Date();
+      overlay.classList.remove("hidden");
+
+      function cleanup() {
+        overlay.classList.add("hidden");
+        confirmBtn.removeEventListener("click", onConfirm);
+        cancelBtn.removeEventListener("click", onCancel);
+      }
+      function onConfirm() {
+        if (!input.value) { return; } // ne fait rien tant qu'aucune date n'est choisie
+        const [y, m, d] = input.value.split("-").map(Number);
+        cleanup();
+        resolve(formatDateFR(new Date(y, m - 1, d)));
+      }
+      function onCancel() {
+        cleanup();
+        resolve(null);
+      }
+      confirmBtn.addEventListener("click", onConfirm);
+      cancelBtn.addEventListener("click", onCancel);
+    });
+  }
+
+  async function insertTemplate(t) {
+    let subjectRaw = resolveShortcuts(t.subject || "");
+    let bodyRaw = resolveShortcuts(t.body || "");
+
+    // {{calendar}} : demande une date au moment de l'insertion, remplace toutes les
+    // occurrences (objet + corps) par la date choisie une fois pour toutes.
+    if (subjectRaw.includes("{{calendar}}") || bodyRaw.includes("{{calendar}}")) {
+      const chosen = await promptForCalendarDate();
+      if (chosen === null) {
+        setStatus("Insertion annulée.");
+        return;
+      }
+      subjectRaw = subjectRaw.replaceAll("{{calendar}}", chosen);
+      bodyRaw = bodyRaw.replaceAll("{{calendar}}", chosen);
+    }
+
+    const subject = applyPlaceholders(subjectRaw);
+    const bodyHtml = applyPlaceholders(bodyRaw).replaceAll("\n", "<br>");
     const toList = parseRecipients(t.to);
     const ccList = parseRecipients(t.cc);
     const bccList = parseRecipients(t.bcc);
@@ -701,6 +839,52 @@
     fieldEl.setSelectionRange(newPos, newPos);
   }
 
+  // Cherche les ##raccourcis tapés directement dans un mail déjà ouvert (objet + corps)
+  // et les remplace par le contenu du modèle correspondant, avec les balises de date résolues.
+  function resolveShortcutsInCurrentEmail() {
+    const item = Office.context.mailbox.item;
+
+    const processSubject = () => new Promise((resolve, reject) => {
+      item.subject.getAsync((res) => {
+        if (res.status !== Office.AsyncResultStatus.Succeeded) return reject(res.error);
+        const original = res.value || "";
+        const updated = applyPlaceholders(resolveShortcuts(original));
+        if (updated === original) return resolve(false);
+        item.subject.setAsync(updated, (res2) => {
+          if (res2.status === Office.AsyncResultStatus.Succeeded) resolve(true);
+          else reject(res2.error);
+        });
+      });
+    });
+
+    const processBody = () => new Promise((resolve, reject) => {
+      item.body.getAsync(Office.CoercionType.Html, (res) => {
+        if (res.status !== Office.AsyncResultStatus.Succeeded) return reject(res.error);
+        const original = res.value || "";
+        const updated = applyPlaceholders(resolveShortcuts(original));
+        if (updated === original) return resolve(false);
+        item.body.setAsync(
+          updated,
+          { coercionType: Office.CoercionType.Html },
+          (res2) => {
+            if (res2.status === Office.AsyncResultStatus.Succeeded) resolve(true);
+            else reject(res2.error);
+          }
+        );
+      });
+    });
+
+    Promise.all([processSubject(), processBody()])
+      .then(([subjectChanged, bodyChanged]) => {
+        if (subjectChanged || bodyChanged) {
+          setStatus("Raccourcis traités.");
+        } else {
+          setStatus("Aucun ##raccourci trouvé dans ce mail.");
+        }
+      })
+      .catch((err) => setStatus("Erreur : " + (err ? err.message : "inconnue"), true));
+  }
+
   Office.onReady(() => {
     loadTemplates();
     renderList();
@@ -751,6 +935,13 @@
       insertAtCursor(field, formatDateFR(localDate));
       popover.classList.add("hidden");
     });
+
+    // Le bouton "Traiter les raccourcis ##" n'a de sens que dans un mail déjà ouvert en rédaction
+    if (isComposeMode()) {
+      const btnResolve = document.getElementById("btnResolveShortcuts");
+      btnResolve.classList.remove("hidden");
+      btnResolve.addEventListener("click", resolveShortcutsInCurrentEmail);
+    }
   });
 </script>
 
