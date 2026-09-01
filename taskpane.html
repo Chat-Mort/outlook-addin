@@ -489,7 +489,10 @@
   // Remplace ##raccourci par le corps du modèle correspondant, récursivement (un modèle
   // peut inclure un autre modèle via son raccourci). maxDepth évite les boucles infinies
   // si deux modèles se référencent l'un l'autre par erreur.
-  function resolveShortcuts(text, maxDepth) {
+  // htmlMode=true : on convertit les sauts de ligne du modèle inséré en <br>, nécessaire
+  // quand le texte autour est déjà du HTML (cas du bouton "Traiter les raccourcis"), sinon
+  // les \n bruts sont ignorés par le rendu HTML et tout se retrouve collé sur une ligne.
+  function resolveShortcuts(text, maxDepth, htmlMode) {
     if (maxDepth === undefined) maxDepth = 5;
     if (maxDepth <= 0) return text;
     if (!text || text.indexOf("##") === -1) return text;
@@ -497,7 +500,8 @@
     return text.replace(/##(\w+)/g, (match, key) => {
       const found = templates.find((t) => t.shortcut && t.shortcut === key.toLowerCase());
       if (!found) return match; // raccourci inconnu : on laisse le texte tel quel
-      return resolveShortcuts(found.body || "", maxDepth - 1);
+      const resolved = resolveShortcuts(found.body || "", maxDepth - 1, htmlMode);
+      return htmlMode ? resolved.replaceAll("\n", "<br>") : resolved;
     });
   }
 
@@ -861,7 +865,7 @@
       item.body.getAsync(Office.CoercionType.Html, (res) => {
         if (res.status !== Office.AsyncResultStatus.Succeeded) return reject(res.error);
         const original = res.value || "";
-        const updated = applyPlaceholders(resolveShortcuts(original));
+        const updated = applyPlaceholders(resolveShortcuts(original, undefined, true));
         if (updated === original) return resolve(false);
         item.body.setAsync(
           updated,
