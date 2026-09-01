@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mes Modèles Pro</title>
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<style>
+  :root {
+    --ink: #1b2430;
+    --ink-soft: #4c5a6b;
+    --paper: #f5f6f8;
+    --line: #d7dce2;
+    --accent: #1e40af;
+    --accent-soft: #e7ecfb;
+    --danger: #9a2f2f;
+    --card: #ffffff;
+  }
+  [data-theme="dark"] {
+    --ink: #e7ebf1;
+    --ink-soft: #9aa7b8;
+    --paper: #161b22;
+    --line: #2c3542;
+    --accent: #6d93f0;
+    --accent-soft: #22304f;
+    --danger: #e06767;
+    --card: #1e252f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Arial, sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+    font-size: 14px;
+  }
+  header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--line);
+    background: var(--card);
+  }
+  header h1 {
+    font-size: 15px;
+    margin: 0 0 2px;
+    letter-spacing: 0.2px;
+  }
+  header p {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 12px;
+  }
+
+  main { padding: 12px 16px 24px; }
+
+  button {
+    font-family: inherit;
+    font-size: 12.5px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    border-radius: 6px;
+    padding: 7px 10px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  button.primary:hover { background: #16307f; color: #fff; }
+  button.ghost { border-color: transparent; background: transparent; }
+  button.danger { color: var(--danger); }
+  button.danger:hover { border-color: var(--danger); color: var(--danger); }
+  button:disabled { opacity: 0.45; cursor: default; }
+
+  .list-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 4px 0 8px;
+  }
+  .list-head h2 {
+    font-size: 12px;
+    text-transform: none;
+    color: var(--ink-soft);
+    margin: 0;
+    font-weight: 600;
+  }
+
+  .template {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--card);
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  .template-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .template-name {
+    font-weight: 600;
+    margin: 0 0 2px;
+  }
+  .template-preview {
+    color: var(--ink-soft);
+    font-size: 12px;
+    margin: 0;
+    max-height: 2.6em;
+    overflow: hidden;
+  }
+  .template-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+  .template-actions button { padding: 5px 8px; font-size: 12px; }
+
+  .empty {
+    color: var(--ink-soft);
+    font-size: 12.5px;
+    padding: 18px 4px;
+    text-align: center;
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+  }
+
+  #status {
+    font-size: 12px;
+    padding: 6px 16px;
+    color: var(--accent);
+    min-height: 18px;
+  }
+  #status.error { color: var(--danger); }
+
+  /* Formulaire d'édition */
+  .form {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--card);
+    padding: 12px;
+    margin-bottom: 14px;
+  }
+  .form label {
+    display: block;
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin: 8px 0 3px;
+  }
+  .form input, .form textarea {
+    width: 100%;
+    font-family: inherit;
+    font-size: 13px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 8px;
+    color: var(--ink);
+    background: var(--card);
+  }
+  .form textarea { min-height: 110px; resize: vertical; }
+  .form-hint {
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-top: 4px;
+  }
+  .form-hint code {
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 1px 4px;
+    border-radius: 4px;
+  }
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 12px;
+  }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Mes Modèles Pro</h1>
+  <p>Modèles réutilisables avec date automatique</p>
+</header>
+
+<main>
+  <div class="list-head">
+    <h2>Modèles enregistrés</h2>
+    <button class="primary" id="btnNew">+ Nouveau</button>
+  </div>
+
+  <div id="templateList"></div>
+  <div id="emptyState" class="empty hidden">
+    Aucun modèle pour l'instant. Clique sur « + Nouveau » pour créer le premier.
+  </div>
+
+  <div id="form" class="form hidden">
+    <label for="fName">Nom du modèle</label>
+    <input id="fName" type="text" placeholder="Ex: Réservation lendemain" />
+
+    <label for="fTo">Destinataires (À)</label>
+    <input id="fTo" type="text" placeholder="ex: contact@client.com, autre@client.com" />
+
+    <label for="fCc">Copie (Cc) — facultatif</label>
+    <input id="fCc" type="text" placeholder="ex: adv@monentreprise.com" />
+
+    <label for="fBcc">Copie cachée (Cci) — facultatif</label>
+    <input id="fBcc" type="text" placeholder="ex: archive@monentreprise.com" />
+
+    <label for="fSubject">Objet du mail</label>
+    <input id="fSubject" type="text" placeholder="Ex: Réservation transport - {{date}}" />
+
+    <label for="fBody">Corps du mail</label>
+    <textarea id="fBody" placeholder="Bonjour,&#10;&#10;Merci de confirmer l'enlèvement du {{date}}.&#10;&#10;Cordialement,"></textarea>
+    <p class="form-hint">
+      Dates calendaires : <code>{{date}}</code>, <code>{{demain}}</code>, <code>{{hier}}</code><br/>
+      Jours ouvrés (week-ends ignorés) : <code>{{joursouvres+N}}</code> — ex: <code>{{joursouvres+2}}</code>
+      un jeudi donne le lundi suivant, pas le samedi. Fonctionne aussi en négatif : <code>{{joursouvres-3}}</code>.<br/>
+      Format JJ/MM/AAAA, remplacé automatiquement à chaque insertion.
+    </p>
+
+    <div class="form-actions">
+      <button class="ghost" id="btnCancel">Annuler</button>
+      <button class="primary" id="btnSave">Enregistrer</button>
+    </div>
+  </div>
+</main>
+
+<div id="status"></div>
+
+<script>
+  const STORAGE_KEY = "modeles_pro_templates_v1";
+  let templates = [];
+  let editingId = null;
+
+  function pad(n) { return String(n).padStart(2, "0"); }
+
+  function formatDateFR(d) {
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  }
+
+  function todayStr() { return formatDateFR(new Date()); }
+  function tomorrowStr() { return offsetDateStr(1); }
+  function offsetDateStr(days) {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return formatDateFR(d);
+  }
+
+  // Avance ou recule de n jours OUVRÉS (lundi à vendredi), en sautant samedi/dimanche.
+  // Ex: jeudi + 2 jours ouvrés => saute vendredi (1) puis le week-end ne compte pas => lundi (2)
+  function addBusinessDays(n) {
+    const d = new Date();
+    const step = n >= 0 ? 1 : -1;
+    let remaining = Math.abs(n);
+    while (remaining > 0) {
+      d.setDate(d.getDate() + step);
+      const day = d.getDay(); // 0 = dimanche, 6 = samedi
+      if (day !== 0 && day !== 6) remaining--;
+    }
+    return d;
+  }
+  function businessDayOffsetStr(n) {
+    return formatDateFR(addBusinessDays(n));
+  }
+
+  function applyPlaceholders(text) {
+    let result = text
+      .replaceAll("{{date}}", todayStr())
+      .replaceAll("{{demain}}", tomorrowStr())
+      .replaceAll("{{hier}}", offsetDateStr(-1));
+
+    // {{date+N}} / {{date-N}} : décalage calendaire classique (compte aussi les week-ends)
+    result = result.replace(/\{\{date([+-]\d+)\}\}/g, (match, offset) => {
+      return offsetDateStr(parseInt(offset, 10));
+    });
+
+    // {{joursouvres+N}} / {{joursouvres-N}} : décalage en jours ouvrés, week-ends ignorés
+    result = result.replace(/\{\{joursouvres([+-]\d+)\}\}/g, (match, offset) => {
+      return businessDayOffsetStr(parseInt(offset, 10));
+    });
+
+    return result;
+  }
+
+  function loadTemplates() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      templates = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      templates = [];
+    }
+  }
+
+  function saveTemplates() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
+  }
+
+  function setStatus(msg, isError) {
+    const el = document.getElementById("status");
+    el.textContent = msg || "";
+    el.className = isError ? "error" : "";
+    if (msg) setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 4000);
+  }
+
+  function renderList() {
+    const list = document.getElementById("templateList");
+    const empty = document.getElementById("emptyState");
+    list.innerHTML = "";
+
+    if (templates.length === 0) {
+      empty.classList.remove("hidden");
+      return;
+    }
+    empty.classList.add("hidden");
+
+    const insertLabel = isComposeMode() ? "Insérer dans le mail" : "Créer un nouveau mail";
+
+    templates.forEach((t) => {
+      const card = document.createElement("div");
+      card.className = "template";
+      card.innerHTML = `
+        <div class="template-top">
+          <div>
+            <p class="template-name"></p>
+            <p class="template-preview"></p>
+          </div>
+        </div>
+        <div class="template-actions">
+          <button class="primary btn-insert"></button>
+          <button class="btn-edit">Modifier</button>
+          <button class="danger btn-delete">Supprimer</button>
+        </div>
+      `;
+      card.querySelector(".template-name").textContent = t.name;
+      card.querySelector(".template-preview").textContent = t.subject || (t.body || "").slice(0, 80);
+      card.querySelector(".btn-insert").textContent = insertLabel;
+
+      card.querySelector(".btn-insert").addEventListener("click", () => insertTemplate(t));
+      card.querySelector(".btn-edit").addEventListener("click", () => openForm(t));
+      card.querySelector(".btn-delete").addEventListener("click", () => deleteTemplate(t.id));
+
+      list.appendChild(card);
+    });
+  }
+
+  function openForm(t) {
+    editingId = t ? t.id : null;
+    document.getElementById("fName").value = t ? t.name : "";
+    document.getElementById("fTo").value = t ? (t.to || "") : "";
+    document.getElementById("fCc").value = t ? (t.cc || "") : "";
+    document.getElementById("fBcc").value = t ? (t.bcc || "") : "";
+    document.getElementById("fSubject").value = t ? t.subject : "";
+    document.getElementById("fBody").value = t ? t.body : "";
+    document.getElementById("form").classList.remove("hidden");
+    document.getElementById("fName").focus();
+  }
+
+  function closeForm() {
+    document.getElementById("form").classList.add("hidden");
+    editingId = null;
+  }
+
+  function saveForm() {
+    const name = document.getElementById("fName").value.trim();
+    const to = document.getElementById("fTo").value.trim();
+    const cc = document.getElementById("fCc").value.trim();
+    const bcc = document.getElementById("fBcc").value.trim();
+    const subject = document.getElementById("fSubject").value.trim();
+    const body = document.getElementById("fBody").value;
+
+    if (!name) { setStatus("Donne un nom au modèle.", true); return; }
+
+    if (editingId) {
+      const t = templates.find((x) => x.id === editingId);
+      if (t) { t.name = name; t.to = to; t.cc = cc; t.bcc = bcc; t.subject = subject; t.body = body; }
+    } else {
+      templates.push({ id: Date.now().toString(), name, to, cc, bcc, subject, body });
+    }
+    saveTemplates();
+    renderList();
+    closeForm();
+    setStatus("Modèle enregistré.");
+  }
+
+  function deleteTemplate(id) {
+    templates = templates.filter((t) => t.id !== id);
+    saveTemplates();
+    renderList();
+    setStatus("Modèle supprimé.");
+  }
+
+  // Transforme "a@x.com, b@y.com ; c@z.com" en tableau d'adresses propres
+  function parseRecipients(text) {
+    if (!text) return [];
+    return text.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+  }
+
+  // En rédaction, item.subject est un objet avec setAsync. En lecture (boîte de réception),
+  // item.subject est une simple chaîne de caractères. On s'en sert pour savoir dans quel
+  // contexte on se trouve, sans que tu aies besoin de le préciser toi-même.
+  function isComposeMode() {
+    const item = Office.context.mailbox.item;
+    return !!(item && item.subject && typeof item.subject === "object");
+  }
+
+  function insertTemplate(t) {
+    const subject = applyPlaceholders(t.subject || "");
+    const bodyHtml = applyPlaceholders(t.body || "").replaceAll("\n", "<br>");
+    const toList = parseRecipients(t.to);
+    const ccList = parseRecipients(t.cc);
+    const bccList = parseRecipients(t.bcc);
+
+    if (isComposeMode()) {
+      // Un mail est déjà ouvert en rédaction : on remplit ce mail-là.
+      insertIntoOpenDraft(subject, bodyHtml, toList, ccList, bccList, t.name);
+    } else {
+      // Aucun mail en cours de rédaction (tu es dans ta boîte de réception) :
+      // on crée directement un nouveau mail entièrement pré-rempli.
+      Office.context.mailbox.displayNewMessageForm({
+        toRecipients: toList,
+        ccRecipients: ccList,
+        bccRecipients: bccList,
+        subject: subject,
+        htmlBody: bodyHtml
+      });
+      setStatus(`Nouveau mail créé depuis « ${t.name} ».`);
+    }
+  }
+
+  function insertIntoOpenDraft(subject, bodyHtml, toList, ccList, bccList, name) {
+    const item = Office.context.mailbox.item;
+
+    const setField = (field, value) => new Promise((resolve, reject) => {
+      if (value === undefined || value === null) return resolve();
+      if (Array.isArray(value) && value.length === 0) return resolve();
+      if (typeof value === "string" && !value) return resolve();
+      field.setAsync(value, (res) => {
+        if (res.status === Office.AsyncResultStatus.Succeeded) resolve();
+        else reject(res.error);
+      });
+    });
+
+    const setBody = () => new Promise((resolve, reject) => {
+      item.body.setAsync(
+        bodyHtml,
+        { coercionType: Office.CoercionType.Html },
+        (res) => {
+          if (res.status === Office.AsyncResultStatus.Succeeded) resolve();
+          else reject(res.error);
+        }
+      );
+    });
+
+    setField(item.subject, subject)
+      .then(() => setField(item.to, toList))
+      .then(() => setField(item.cc, ccList))
+      .then(() => setField(item.bcc, bccList))
+      .then(setBody)
+      .then(() => setStatus(`Modèle « ${name} » inséré.`))
+      .catch((err) => setStatus("Erreur à l'insertion : " + (err ? err.message : "inconnue"), true));
+  }
+
+  function applyOfficeTheme() {
+    let isDark = false;
+    try {
+      const theme = Office.context.officeTheme;
+      if (theme && theme.bodyBackgroundColor) {
+        // Convertit la couleur de fond fournie par Outlook en luminosité pour savoir si le thème est sombre
+        const hex = theme.bodyBackgroundColor.replace("#", "");
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        isDark = luminance < 0.5;
+      } else {
+        // Repli si Outlook ne fournit pas de thème : on suit les préférences du système
+        isDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      }
+    } catch (e) {
+      isDark = false;
+    }
+    document.body.setAttribute("data-theme", isDark ? "dark" : "light");
+  }
+
+  Office.onReady(() => {
+    loadTemplates();
+    renderList();
+    applyOfficeTheme();
+
+    document.getElementById("btnNew").addEventListener("click", () => openForm(null));
+    document.getElementById("btnCancel").addEventListener("click", closeForm);
+    document.getElementById("btnSave").addEventListener("click", saveForm);
+  });
+</script>
+
+</body>
+</html>
