@@ -660,21 +660,26 @@
     return result;
   }
 
-  // Replaces ##shortcut with the matching template's body, recursively (a template can
+  // Replaces ##shortcut with the matching template's content, recursively (a template can
   // include another one via its shortcut). maxDepth guards against infinite loops if two
   // templates end up referencing each other by mistake.
+  // sourceField: "subject" or "body" — which field of the referenced template to pull from.
+  // A shortcut used in a subject pulls the referenced template's subject; used in a body,
+  // it pulls the body. Defaults to "body" for callers that don't specify it.
   // htmlMode=true: converts the inserted template's line breaks into <br>, needed when the
   // surrounding text is already HTML (the "Resolve shortcuts" button case) — otherwise raw
   // \n characters are ignored by HTML rendering and everything collapses onto one line.
-  function resolveShortcuts(text, maxDepth, htmlMode) {
+  function resolveShortcuts(text, maxDepth, htmlMode, sourceField) {
     if (maxDepth === undefined) maxDepth = 5;
+    if (sourceField === undefined) sourceField = "body";
     if (maxDepth <= 0) return text;
     if (!text || text.indexOf("##") === -1) return text;
 
     return text.replace(/##(\w+)/g, (match, key) => {
       const found = templates.find((t) => t.shortcut && t.shortcut === key.toLowerCase());
       if (!found) return match; // unknown shortcut: leave the text as-is
-      const resolved = resolveShortcuts(found.body || "", maxDepth - 1, htmlMode);
+      const sourceText = (sourceField === "subject" ? found.subject : found.body) || "";
+      const resolved = resolveShortcuts(sourceText, maxDepth - 1, htmlMode, sourceField);
       return htmlMode ? resolved.replaceAll("\n", "<br>") : resolved;
     });
   }
@@ -985,8 +990,8 @@
   }
 
   async function insertTemplate(t) {
-    let subjectRaw = resolveShortcuts(t.subject || "");
-    let bodyRaw = resolveShortcuts(t.body || "");
+    let subjectRaw = resolveShortcuts(t.subject || "", undefined, false, "subject");
+    let bodyRaw = resolveShortcuts(t.body || "", undefined, false, "body");
 
     // {{c}}: asks for a date at insertion time, replaces every occurrence
     // (subject + body) with the chosen date, once.
@@ -1122,7 +1127,7 @@
       item.subject.getAsync((res) => {
         if (res.status !== Office.AsyncResultStatus.Succeeded) return reject(res.error);
         const original = res.value || "";
-        const updated = applyPlaceholders(resolveShortcuts(original));
+        const updated = applyPlaceholders(resolveShortcuts(original, undefined, false, "subject"));
         if (updated === original) return resolve(false);
         item.subject.setAsync(updated, (res2) => {
           if (res2.status === Office.AsyncResultStatus.Succeeded) resolve(true);
@@ -1135,7 +1140,7 @@
       item.body.getAsync(Office.CoercionType.Html, (res) => {
         if (res.status !== Office.AsyncResultStatus.Succeeded) return reject(res.error);
         const original = res.value || "";
-        const updated = applyPlaceholders(resolveShortcuts(original, undefined, true));
+        const updated = applyPlaceholders(resolveShortcuts(original, undefined, true, "body"));
         if (updated === original) return resolve(false);
         item.body.setAsync(
           updated,
