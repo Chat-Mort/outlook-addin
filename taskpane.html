@@ -349,10 +349,18 @@
   .tag-menu-checkbox {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 6px;
     font-size: 12px;
     padding: 2px 4px;
     margin-bottom: 8px;
+  }
+  /* Overrides ".form input { width: 100%; }" — this checkbox ends up inside .form at
+     runtime (the tag menu is appended there dynamically), which would otherwise stretch it. */
+  .tag-menu-checkbox input[type="checkbox"] {
+    width: auto;
+    flex: 0 0 auto;
+    margin: 0;
   }
   .tag-menu-preview {
     font-size: 12px;
@@ -528,8 +536,8 @@
         <input type="number" id="dayOffset" min="0" value="0" />
       </div>
       <label class="tag-menu-checkbox">
-        <input type="checkbox" id="dayBusinessOnly" />
         Business days only
+        <input type="checkbox" id="dayBusinessOnly" />
       </label>
       <div class="tag-menu-preview" id="dayPreview">Today — 01/01/2026</div>
       <div class="tag-menu-actions">
