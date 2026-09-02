@@ -466,6 +466,7 @@
 
 <script>
   const STORAGE_KEY = "modeles_pro_templates_v1";
+  const ATTACH_STORAGE_KEY = "modeles_pro_attachments_v1";
   const SORT_KEY = "modeles_pro_sort_v1";
   let templates = [];
   let editingId = null;
@@ -563,13 +564,39 @@
     });
   }
 
-  function loadTemplates() {
+  // Migre automatiquement les modèles créés avant ce changement (encore dans localStorage,
+  // spécifiques à ce navigateur/PC) vers RoamingSettings (synchronisé via Exchange), une seule
+  // fois, à condition que RoamingSettings soit encore vide.
+  function migrateFromLocalStorageIfNeeded() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const alreadyRoaming = Office.context.roamingSettings.get(STORAGE_KEY);
+      if (alreadyRoaming) return; // déjà migré, ou déjà des données côté Exchange
+      const legacyRaw = localStorage.getItem(STORAGE_KEY);
+      if (!legacyRaw) return; // rien à migrer
+      const legacyTemplates = JSON.parse(legacyRaw);
+      if (!Array.isArray(legacyTemplates) || legacyTemplates.length === 0) return;
+      templates = legacyTemplates;
+      saveTemplates(); // écrit dans RoamingSettings + sépare les pièces jointes en local
+      setStatus(`${legacyTemplates.length} modèle(s) migré(s) automatiquement vers le stockage synchronisé.`);
+    } catch (e) {
+      // Pas grave si la migration échoue : au pire, l'utilisateur repart d'une liste vide côté roaming.
+    }
+  }
+
+  function loadTemplates() {
+    migrateFromLocalStorageIfNeeded();
+    try {
+      const raw = Office.context.roamingSettings.get(STORAGE_KEY);
       templates = raw ? JSON.parse(raw) : [];
     } catch (e) {
       templates = [];
     }
+
+    // Les pièces jointes restent en local (trop volumineuses pour les 32 Ko de RoamingSettings) ;
+    // on les rattache ici aux modèles correspondants pour l'affichage/l'insertion.
+    const attachStore = loadAttachmentStore();
+    templates.forEach((t) => { t.attachments = attachStore[t.id] || []; });
+
     // Modèles créés avant l'ajout du tri : on leur donne des dates de repli à partir
     // de leur id (qui est un horodatage), pour que le tri fonctionne quand même.
     let backfilled = false;
@@ -582,7 +609,48 @@
   }
 
   function saveTemplates() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
+    // Sépare les pièces jointes (stockage local, par appareil) du reste (synchronisé via Exchange).
+    const attachStore = {};
+    const coreTemplates = templates.map((t) => {
+      attachStore[t.id] = t.attachments || [];
+      const copy = Object.assign({}, t);
+      delete copy.attachments;
+      return copy;
+    });
+    saveAttachmentStore(attachStore);
+
+    try {
+      Office.context.roamingSettings.set(STORAGE_KEY, JSON.stringify(coreTemplates));
+      Office.context.roamingSettings.saveAsync((res) => {
+        if (res.status !== Office.AsyncResultStatus.Succeeded) {
+          const isSizeLimit = res.error && res.error.code === 9057;
+          setStatus(
+            isSizeLimit
+              ? "Impossible d'enregistrer : la limite de stockage (32 Ko) est atteinte. Supprime un modèle ou raccourcis les textes."
+              : "Erreur de sauvegarde : " + (res.error ? res.error.message : "inconnue"),
+            true
+          );
+        }
+      });
+    } catch (e) {
+      setStatus("Erreur de sauvegarde : " + e.message, true);
+    }
+  }
+
+  function loadAttachmentStore() {
+    try {
+      const raw = localStorage.getItem(ATTACH_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function saveAttachmentStore(store) {
+    try {
+      localStorage.setItem(ATTACH_STORAGE_KEY, JSON.stringify(store));
+    } catch (e) {
+      setStatus("Pièce jointe non sauvegardée localement : " + e.message, true);
+    }
   }
 
   function loadSortPref() {
