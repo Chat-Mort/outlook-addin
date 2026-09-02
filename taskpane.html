@@ -1119,49 +1119,66 @@
   }
 
   // Finds ##shortcuts typed directly in an already-open email (subject + body) and replaces
-  // them with the matching template's content, with date tags resolved too.
-  function resolveShortcutsInCurrentEmail() {
+  // them with the matching template's content, with date tags resolved too. If {{c}} shows up
+  // after resolving shortcuts, prompts for a date once and applies it to both fields — same
+  // behavior as inserting a template directly.
+  async function resolveShortcutsInCurrentEmail() {
     const item = Office.context.mailbox.item;
 
-    const processSubject = () => new Promise((resolve, reject) => {
+    const getSubject = () => new Promise((resolve, reject) => {
       item.subject.getAsync((res) => {
-        if (res.status !== Office.AsyncResultStatus.Succeeded) return reject(res.error);
-        const original = res.value || "";
-        const updated = applyPlaceholders(resolveShortcuts(original, undefined, false, "subject"));
-        if (updated === original) return resolve(false);
-        item.subject.setAsync(updated, (res2) => {
-          if (res2.status === Office.AsyncResultStatus.Succeeded) resolve(true);
-          else reject(res2.error);
-        });
+        if (res.status === Office.AsyncResultStatus.Succeeded) resolve(res.value || "");
+        else reject(res.error);
       });
     });
-
-    const processBody = () => new Promise((resolve, reject) => {
+    const getBody = () => new Promise((resolve, reject) => {
       item.body.getAsync(Office.CoercionType.Html, (res) => {
-        if (res.status !== Office.AsyncResultStatus.Succeeded) return reject(res.error);
-        const original = res.value || "";
-        const updated = applyPlaceholders(resolveShortcuts(original, undefined, true, "body"));
-        if (updated === original) return resolve(false);
-        item.body.setAsync(
-          updated,
-          { coercionType: Office.CoercionType.Html },
-          (res2) => {
-            if (res2.status === Office.AsyncResultStatus.Succeeded) resolve(true);
-            else reject(res2.error);
-          }
-        );
+        if (res.status === Office.AsyncResultStatus.Succeeded) resolve(res.value || "");
+        else reject(res.error);
+      });
+    });
+    const setSubject = (value) => new Promise((resolve, reject) => {
+      item.subject.setAsync(value, (res) => {
+        if (res.status === Office.AsyncResultStatus.Succeeded) resolve();
+        else reject(res.error);
+      });
+    });
+    const setBody = (value) => new Promise((resolve, reject) => {
+      item.body.setAsync(value, { coercionType: Office.CoercionType.Html }, (res) => {
+        if (res.status === Office.AsyncResultStatus.Succeeded) resolve();
+        else reject(res.error);
       });
     });
 
-    Promise.all([processSubject(), processBody()])
-      .then(([subjectChanged, bodyChanged]) => {
-        if (subjectChanged || bodyChanged) {
-          setStatus("Shortcuts resolved.");
-        } else {
-          setStatus("No ##shortcut found in this email.");
+    try {
+      const [originalSubject, originalBody] = await Promise.all([getSubject(), getBody()]);
+
+      let subjectRaw = resolveShortcuts(originalSubject, undefined, false, "subject");
+      let bodyRaw = resolveShortcuts(originalBody, undefined, true, "body");
+
+      if (subjectRaw.includes("{{c}}") || bodyRaw.includes("{{c}}")) {
+        const chosen = await promptForCalendarDate();
+        if (chosen === null) {
+          setStatus("Cancelled.");
+          return;
         }
-      })
-      .catch((err) => setStatus("Error: " + (err ? err.message : "unknown"), true));
+        subjectRaw = subjectRaw.replaceAll("{{c}}", chosen);
+        bodyRaw = bodyRaw.replaceAll("{{c}}", chosen);
+      }
+
+      const updatedSubject = applyPlaceholders(subjectRaw);
+      const updatedBody = applyPlaceholders(bodyRaw);
+
+      const subjectChanged = updatedSubject !== originalSubject;
+      const bodyChanged = updatedBody !== originalBody;
+
+      if (subjectChanged) await setSubject(updatedSubject);
+      if (bodyChanged) await setBody(updatedBody);
+
+      setStatus(subjectChanged || bodyChanged ? "Shortcuts resolved." : "No ##shortcut found in this email.");
+    } catch (err) {
+      setStatus("Error: " + (err ? err.message : "unknown"), true);
+    }
   }
 
   Office.onReady(() => {
