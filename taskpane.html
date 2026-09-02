@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Mes Modèles Pro</title>
+<title>Swift Compose</title>
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
 <style>
   :root {
@@ -181,7 +181,7 @@
   }
   #status.error { color: var(--danger); }
 
-  /* Formulaire d'édition */
+  /* Edit form */
   .form {
     border: 1px solid var(--line);
     border-radius: 8px;
@@ -224,7 +224,7 @@
     margin-top: 12px;
   }
 
-  /* Pièces jointes */
+  /* Attachments */
   .attach-row {
     display: flex;
     align-items: center;
@@ -262,7 +262,7 @@
     margin-top: 4px;
   }
 
-  /* Bouton + popover calendrier dans le formulaire */
+  /* Tag menu button + popover in the form */
   .field-with-calendar {
     position: relative;
     display: flex;
@@ -276,7 +276,7 @@
     font-size: 14px;
     line-height: 1;
   }
-  .calendar-popover {
+  .tag-menu {
     position: absolute;
     top: calc(100% + 4px);
     right: 0;
@@ -284,28 +284,91 @@
     background: var(--card);
     border: 1px solid var(--line);
     border-radius: 8px;
-    padding: 10px;
+    padding: 6px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    width: 220px;
+  }
+  .tag-menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 7px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12.5px;
+  }
+  .tag-menu-item:hover { background: var(--accent-soft); color: var(--accent); }
+  .tag-menu-help {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+    font-size: 10px;
+    line-height: 14px;
+    text-align: center;
+    cursor: help;
+  }
+  .tag-menu-back {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: 4px 4px 8px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 8px;
+  }
+  .tag-menu-back:hover { color: var(--accent); }
+  .tag-menu-row {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    width: 200px;
+    gap: 3px;
+    padding: 0 4px;
+    margin-bottom: 8px;
   }
-  .calendar-popover input[type="date"] {
-    width: 100%;
+  .tag-menu-row label {
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+  .tag-menu-row select,
+  .tag-menu-row input[type="number"] {
     font-family: inherit;
-    font-size: 13px;
+    font-size: 12.5px;
     border: 1px solid var(--line);
     border-radius: 6px;
-    padding: 6px 8px;
+    padding: 5px 6px;
     color: var(--ink);
     background: var(--card);
+    width: 100%;
   }
-  [data-theme="dark"] .calendar-popover input[type="date"]::-webkit-calendar-picker-indicator {
-    filter: invert(1);
+  .tag-menu-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 2px 4px;
+    margin-bottom: 8px;
+  }
+  .tag-menu-preview {
+    font-size: 12px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 6px;
+    padding: 6px 8px;
+    margin: 0 4px 8px;
+    text-align: center;
+  }
+  .tag-menu-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 4px;
   }
 
-  /* Fenêtre modale "choisis une date" affichée au moment d'insérer un modèle contenant {{calendar}} */
+  /* "Pick a date" modal, shown when inserting a template containing {{c}} */
   .modal-overlay {
     position: fixed;
     inset: 0;
@@ -353,113 +416,159 @@
 <body>
 
 <header>
-  <h1>Mes Modèles Pro</h1>
-  <p>Modèles réutilisables avec date automatique</p>
+  <h1>Swift Compose</h1>
+  <p>Smart templates with dynamic dates and one-click send</p>
 </header>
 
 <main>
   <div class="list-head">
-    <h2>Modèles enregistrés</h2>
-    <button class="primary" id="btnNew">+ Nouveau</button>
+    <h2>Saved templates</h2>
+    <button class="primary" id="btnNew">+ New</button>
   </div>
 
   <div class="sort-row">
-    <label for="sortSelect">Trier par</label>
+    <label for="sortSelect">Sort by</label>
     <select id="sortSelect">
-      <option value="alpha">Ordre alphabétique</option>
-      <option value="created-desc">Création (plus récent)</option>
-      <option value="created-asc">Création (plus ancien)</option>
-      <option value="modified-desc">Modification (plus récent)</option>
-      <option value="modified-asc">Modification (plus ancien)</option>
+      <option value="alpha">Alphabetical</option>
+      <option value="created-desc">Created (newest)</option>
+      <option value="created-asc">Created (oldest)</option>
+      <option value="modified-desc">Modified (newest)</option>
+      <option value="modified-asc">Modified (oldest)</option>
     </select>
   </div>
 
   <button id="btnResolveShortcuts" class="hidden" style="width:100%; margin-bottom: 10px; font-size:12px;"
-    title="Cherche les ##raccourcis tapés dans ce mail et les remplace par le contenu du modèle correspondant">
-    Traiter les raccourcis ## de ce mail
+    title="Finds ##shortcuts typed in this email and replaces them with the matching template's content">
+    Resolve ## shortcuts in this email
   </button>
 
   <div id="templateList"></div>
   <div id="emptyState" class="empty hidden">
-    Aucun modèle pour l'instant. Clique sur « + Nouveau » pour créer le premier.
+    No templates yet. Click "+ New" to create your first one.
   </div>
 
   <div id="form" class="form hidden">
-    <label for="fName">Nom du modèle</label>
-    <input id="fName" type="text" placeholder="Ex: Réservation lendemain" />
+    <label for="fName">Template name</label>
+    <input id="fName" type="text" placeholder="E.g. Next-day booking" />
 
-    <label for="fShortcut">Raccourci — facultatif</label>
-    <input id="fShortcut" type="text" placeholder="ex: signature (utilisable ailleurs via ##signature)" />
+    <label for="fShortcut">Shortcut — optional</label>
+    <input id="fShortcut" type="text" placeholder="e.g. signature (use elsewhere via ##signature)" />
 
-    <label for="fTo">Destinataires (À)</label>
-    <input id="fTo" type="text" placeholder="ex: contact@client.com, autre@client.com" />
+    <label for="fTo">Recipients (To)</label>
+    <input id="fTo" type="text" placeholder="e.g. contact@client.com, other@client.com" />
 
-    <label for="fCc">Copie (Cc) — facultatif</label>
-    <input id="fCc" type="text" placeholder="ex: adv@monentreprise.com" />
+    <label for="fCc">Cc — optional</label>
+    <input id="fCc" type="text" placeholder="e.g. adv@mycompany.com" />
 
-    <label for="fBcc">Copie cachée (Cci) — facultatif</label>
-    <input id="fBcc" type="text" placeholder="ex: archive@monentreprise.com" />
+    <label for="fBcc">Bcc — optional</label>
+    <input id="fBcc" type="text" placeholder="e.g. archive@mycompany.com" />
 
-    <label for="fSubject">Objet du mail</label>
+    <label for="fSubject">Subject</label>
     <div class="field-with-calendar">
-      <input id="fSubject" type="text" placeholder="Ex: Réservation transport - {{date}}" />
-      <button type="button" class="btn-calendar" data-target="fSubject" title="Insérer une date précise choisie sur un calendrier">📅</button>
+      <input id="fSubject" type="text" placeholder="E.g. Transport booking - {{d}}" />
+      <button type="button" class="btn-calendar" data-target="fSubject" title="Insert a tag">⚡</button>
     </div>
 
-    <label for="fBody">Corps du mail</label>
+    <label for="fBody">Body</label>
     <div class="field-with-calendar">
-      <textarea id="fBody" placeholder="Bonjour,&#10;&#10;Merci de confirmer l'enlèvement du {{date}}.&#10;&#10;Cordialement,"></textarea>
-      <button type="button" class="btn-calendar" data-target="fBody" title="Insérer une date précise choisie sur un calendrier">📅</button>
+      <textarea id="fBody" placeholder="Hi,&#10;&#10;Please confirm pickup on {{d}}.&#10;&#10;Best,"></textarea>
+      <button type="button" class="btn-calendar" data-target="fBody" title="Insert a tag">⚡</button>
     </div>
     <p class="form-hint">
-      Dates calendaires : <code>{{date}}</code>, <code>{{demain}}</code>, <code>{{hier}}</code><br/>
-      Jours ouvrés (week-ends ignorés) : <code>{{jo+N}}</code> — ex: <code>{{jo+2}}</code>
-      un jeudi donne le lundi suivant, pas le samedi. Fonctionne aussi en négatif : <code>{{jo-3}}</code>.<br/>
-      Numéro de semaine : <code>{{week}}</code> (semaine en cours), <code>{{week+N}}</code> / <code>{{week-N}}</code>
-      pour N semaines avant/après (ex: <code>{{week+1}}</code> = semaine prochaine).<br/>
-      Le bouton 📅 insère une date précise de ton choix (fixe, pas recalculée) à l'endroit du curseur, tout de suite.<br/>
-      <code>{{calendar}}</code> : demande la date au moment où <em>toi ou quelqu'un d'autre</em> utilise
-      ce modèle (une fenêtre s'ouvre avec un calendrier, mois en cours, aujourd'hui en surbrillance).<br/>
-      Format JJ/MM/AAAA, remplacé automatiquement à chaque insertion.<br/>
-      Raccourcis : donne un raccourci à ce modèle (champ ci-dessus) pour pouvoir taper
-      <code>##raccourci</code> dans un autre modèle — il sera remplacé par le corps de celui-ci.
+      Format: DD/MM/YYYY, resolved automatically on every insert.
+      Shortcuts: set one above to reuse this template elsewhere via <code>##shortcut</code>.
     </p>
 
-    <label>Pièces jointes — facultatif</label>
+    <label>Attachments — optional</label>
     <input type="file" id="fAttachments" multiple />
     <div id="attachList" class="attach-row" style="margin-top: 6px;"></div>
     <p class="attach-hint">
-      Ajoutées automatiquement si tu insères le modèle dans un mail déjà ouvert. Si le modèle crée un
-      nouveau mail depuis ta boîte de réception, il faudra les rajouter à la main (limite technique
-      d'Outlook, pas quelque chose qu'on peut contourner).
+      Auto-attached only when inserting into an already-open draft. New emails created from the
+      inbox need attachments added manually (Outlook API limitation, not something we can work around).
     </p>
 
     <div class="form-actions">
-      <button class="ghost" id="btnCancel">Annuler</button>
-      <button class="primary" id="btnSave">Enregistrer</button>
+      <button class="ghost" id="btnCancel">Cancel</button>
+      <button class="primary" id="btnSave">Save</button>
     </div>
   </div>
 
-  <!-- Popover calendrier, positionné dynamiquement au clic sur un bouton 📅 -->
-  <div id="calendarPopover" class="calendar-popover hidden">
-    <input type="date" id="calendarPopoverInput" />
-    <div style="display:flex; justify-content:flex-end; gap:6px;">
-      <button class="ghost" id="calendarPopoverCancel" style="padding:5px 8px; font-size:12px;">Annuler</button>
-      <button class="primary" id="calendarPopoverInsert" style="padding:5px 8px; font-size:12px;">Insérer</button>
+  <!-- Tag menu, positioned dynamically when a ⚡ button is clicked -->
+  <div id="tagMenu" class="tag-menu hidden">
+
+    <!-- Main list -->
+    <div id="tagMenuList">
+      <div class="tag-menu-item" id="tagItemDay">
+        <span>Day</span>
+        <span class="tag-menu-help" title="Insert a date offset from today (calendar or business days), e.g. {{d+2}} or {{bd-3}}.">?</span>
+      </div>
+      <div class="tag-menu-item" id="tagItemWeek">
+        <span>Week</span>
+        <span class="tag-menu-help" title="Insert an ISO week number offset from this week, e.g. {{w+1}}.">?</span>
+      </div>
+      <div class="tag-menu-item" id="tagItemCalendar">
+        <span>Calendar</span>
+        <span class="tag-menu-help" title="Inserts {{c}} — asks for a specific date every time this template is used, with a picker (today highlighted).">?</span>
+      </div>
     </div>
+
+    <!-- "Day" detail view -->
+    <div id="tagMenuDay" class="hidden">
+      <div class="tag-menu-back" id="dayBack">‹ Back</div>
+      <div class="tag-menu-row">
+        <label for="dayDirection">Direction</label>
+        <select id="dayDirection">
+          <option value="+">Forward</option>
+          <option value="-">Backward</option>
+        </select>
+      </div>
+      <div class="tag-menu-row">
+        <label for="dayOffset">Days</label>
+        <input type="number" id="dayOffset" min="0" value="0" />
+      </div>
+      <label class="tag-menu-checkbox">
+        <input type="checkbox" id="dayBusinessOnly" />
+        Business days only
+      </label>
+      <div class="tag-menu-preview" id="dayPreview">Today — 01/01/2026</div>
+      <div class="tag-menu-actions">
+        <button class="primary" id="dayInsert" style="padding:5px 8px; font-size:12px;">Insert</button>
+      </div>
+    </div>
+
+    <!-- "Week" detail view -->
+    <div id="tagMenuWeek" class="hidden">
+      <div class="tag-menu-back" id="weekBack">‹ Back</div>
+      <div class="tag-menu-row">
+        <label for="weekDirection">Direction</label>
+        <select id="weekDirection">
+          <option value="+">Forward</option>
+          <option value="-">Backward</option>
+        </select>
+      </div>
+      <div class="tag-menu-row">
+        <label for="weekOffset">Weeks</label>
+        <input type="number" id="weekOffset" min="0" value="0" />
+      </div>
+      <div class="tag-menu-preview" id="weekPreview">This week — W1</div>
+      <div class="tag-menu-actions">
+        <button class="primary" id="weekInsert" style="padding:5px 8px; font-size:12px;">Insert</button>
+      </div>
+    </div>
+
   </div>
 </main>
 
 <div id="status"></div>
 
-<!-- Modale "choisis une date" : s'ouvre au moment d'insérer un modèle contenant {{calendar}} -->
+<!-- "Pick a date" modal: opens when inserting a template that contains {{c}} -->
 <div id="calendarModalOverlay" class="modal-overlay hidden">
   <div class="modal-card">
-    <h3>Choisis une date</h3>
+    <h3>Pick a date</h3>
     <input type="date" id="calendarModalInput" />
     <div class="modal-actions">
-      <button class="ghost" id="calendarModalCancel">Annuler</button>
-      <button class="primary" id="calendarModalConfirm">Valider</button>
+      <button class="ghost" id="calendarModalCancel">Cancel</button>
+      <button class="primary" id="calendarModalConfirm">Confirm</button>
     </div>
   </div>
 </div>
@@ -476,37 +585,36 @@
 
   function pad(n) { return String(n).padStart(2, "0"); }
 
-  function formatDateFR(d) {
+  function formatDate(d) {
     return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
   }
 
-  function todayStr() { return formatDateFR(new Date()); }
-  function tomorrowStr() { return offsetDateStr(1); }
+  function todayStr() { return formatDate(new Date()); }
   function offsetDateStr(days) {
     const d = new Date();
     d.setDate(d.getDate() + days);
-    return formatDateFR(d);
+    return formatDate(d);
   }
 
-  // Avance ou recule de n jours OUVRÉS (lundi à vendredi), en sautant samedi/dimanche.
-  // Ex: jeudi + 2 jours ouvrés => saute vendredi (1) puis le week-end ne compte pas => lundi (2)
+  // Moves n BUSINESS days forward/backward (Mon-Fri), skipping Saturday/Sunday.
+  // E.g. Thursday + 2 business days => skips Friday (1), weekend doesn't count => Monday (2)
   function addBusinessDays(n) {
     const d = new Date();
     const step = n >= 0 ? 1 : -1;
     let remaining = Math.abs(n);
     while (remaining > 0) {
       d.setDate(d.getDate() + step);
-      const day = d.getDay(); // 0 = dimanche, 6 = samedi
+      const day = d.getDay(); // 0 = Sunday, 6 = Saturday
       if (day !== 0 && day !== 6) remaining--;
     }
     return d;
   }
   function businessDayOffsetStr(n) {
-    return formatDateFR(addBusinessDays(n));
+    return formatDate(addBusinessDays(n));
   }
 
-  // Numéro de semaine ISO 8601 (1 à 52/53, lundi comme premier jour, la semaine 1 est celle
-  // qui contient le premier jeudi de l'année — c'est la norme utilisée en France/Europe).
+  // ISO 8601 week number (1 to 52/53, Monday as first day, week 1 is the one containing
+  // the year's first Thursday — the standard used across Europe).
   function getISOWeekNumber(date) {
     const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
     const dayNum = d.getUTCDay() || 7;
@@ -516,41 +624,39 @@
   }
   function weekOffsetStr(n) {
     const d = new Date();
-    d.setDate(d.getDate() + n * 7); // décalage en SEMAINES, pas en jours
+    d.setDate(d.getDate() + n * 7); // offset in WEEKS, not days
     return String(getISOWeekNumber(d));
   }
 
   function applyPlaceholders(text) {
     let result = text
-      .replaceAll("{{date}}", todayStr())
-      .replaceAll("{{demain}}", tomorrowStr())
-      .replaceAll("{{hier}}", offsetDateStr(-1))
-      .replaceAll("{{week}}", weekOffsetStr(0));
+      .replaceAll("{{d}}", todayStr())
+      .replaceAll("{{w}}", weekOffsetStr(0));
 
-    // {{date+N}} / {{date-N}} : décalage calendaire classique (compte aussi les week-ends)
-    result = result.replace(/\{\{date([+-]\d+)\}\}/g, (match, offset) => {
+    // {{d+N}} / {{d-N}}: classic calendar offset (weekends included)
+    result = result.replace(/\{\{d([+-]\d+)\}\}/g, (match, offset) => {
       return offsetDateStr(parseInt(offset, 10));
     });
 
-    // {{jo+N}} / {{jo-N}} : décalage en jours ouvrés, week-ends ignorés
-    result = result.replace(/\{\{jo([+-]\d+)\}\}/g, (match, offset) => {
+    // {{bd+N}} / {{bd-N}}: business-day offset, weekends skipped
+    result = result.replace(/\{\{bd([+-]\d+)\}\}/g, (match, offset) => {
       return businessDayOffsetStr(parseInt(offset, 10));
     });
 
-    // {{week+N}} / {{week-N}} : numéro de semaine, N semaines avant/après aujourd'hui
-    result = result.replace(/\{\{week([+-]\d+)\}\}/g, (match, offset) => {
+    // {{w+N}} / {{w-N}}: week number, N weeks before/after today
+    result = result.replace(/\{\{w([+-]\d+)\}\}/g, (match, offset) => {
       return weekOffsetStr(parseInt(offset, 10));
     });
 
     return result;
   }
 
-  // Remplace ##raccourci par le corps du modèle correspondant, récursivement (un modèle
-  // peut inclure un autre modèle via son raccourci). maxDepth évite les boucles infinies
-  // si deux modèles se référencent l'un l'autre par erreur.
-  // htmlMode=true : on convertit les sauts de ligne du modèle inséré en <br>, nécessaire
-  // quand le texte autour est déjà du HTML (cas du bouton "Traiter les raccourcis"), sinon
-  // les \n bruts sont ignorés par le rendu HTML et tout se retrouve collé sur une ligne.
+  // Replaces ##shortcut with the matching template's body, recursively (a template can
+  // include another one via its shortcut). maxDepth guards against infinite loops if two
+  // templates end up referencing each other by mistake.
+  // htmlMode=true: converts the inserted template's line breaks into <br>, needed when the
+  // surrounding text is already HTML (the "Resolve shortcuts" button case) — otherwise raw
+  // \n characters are ignored by HTML rendering and everything collapses onto one line.
   function resolveShortcuts(text, maxDepth, htmlMode) {
     if (maxDepth === undefined) maxDepth = 5;
     if (maxDepth <= 0) return text;
@@ -558,28 +664,28 @@
 
     return text.replace(/##(\w+)/g, (match, key) => {
       const found = templates.find((t) => t.shortcut && t.shortcut === key.toLowerCase());
-      if (!found) return match; // raccourci inconnu : on laisse le texte tel quel
+      if (!found) return match; // unknown shortcut: leave the text as-is
       const resolved = resolveShortcuts(found.body || "", maxDepth - 1, htmlMode);
       return htmlMode ? resolved.replaceAll("\n", "<br>") : resolved;
     });
   }
 
-  // Migre automatiquement les modèles créés avant ce changement (encore dans localStorage,
-  // spécifiques à ce navigateur/PC) vers RoamingSettings (synchronisé via Exchange), une seule
-  // fois, à condition que RoamingSettings soit encore vide.
+  // Automatically migrates templates created before this change (still in localStorage,
+  // specific to this browser/PC) to RoamingSettings (synced via Exchange), once, as long as
+  // RoamingSettings is still empty.
   function migrateFromLocalStorageIfNeeded() {
     try {
       const alreadyRoaming = Office.context.roamingSettings.get(STORAGE_KEY);
-      if (alreadyRoaming) return; // déjà migré, ou déjà des données côté Exchange
+      if (alreadyRoaming) return; // already migrated, or already has data on the Exchange side
       const legacyRaw = localStorage.getItem(STORAGE_KEY);
-      if (!legacyRaw) return; // rien à migrer
+      if (!legacyRaw) return; // nothing to migrate
       const legacyTemplates = JSON.parse(legacyRaw);
       if (!Array.isArray(legacyTemplates) || legacyTemplates.length === 0) return;
       templates = legacyTemplates;
-      saveTemplates(); // écrit dans RoamingSettings + sépare les pièces jointes en local
-      setStatus(`${legacyTemplates.length} modèle(s) migré(s) automatiquement vers le stockage synchronisé.`);
+      saveTemplates(); // writes to RoamingSettings + splits attachments off locally
+      setStatus(`${legacyTemplates.length} template(s) automatically migrated to synced storage.`);
     } catch (e) {
-      // Pas grave si la migration échoue : au pire, l'utilisateur repart d'une liste vide côté roaming.
+      // Not critical if migration fails: worst case, the user starts with an empty roaming list.
     }
   }
 
@@ -592,13 +698,13 @@
       templates = [];
     }
 
-    // Les pièces jointes restent en local (trop volumineuses pour les 32 Ko de RoamingSettings) ;
-    // on les rattache ici aux modèles correspondants pour l'affichage/l'insertion.
+    // Attachments stay local (too large for RoamingSettings' 32 KB limit); reattached here
+    // to the matching templates for display/insertion.
     const attachStore = loadAttachmentStore();
     templates.forEach((t) => { t.attachments = attachStore[t.id] || []; });
 
-    // Modèles créés avant l'ajout du tri : on leur donne des dates de repli à partir
-    // de leur id (qui est un horodatage), pour que le tri fonctionne quand même.
+    // Templates created before sorting was added: give them fallback dates derived from
+    // their id (a timestamp), so sorting still works.
     let backfilled = false;
     templates.forEach((t) => {
       const fallback = parseInt(t.id, 10) || Date.now();
@@ -609,7 +715,7 @@
   }
 
   function saveTemplates() {
-    // Sépare les pièces jointes (stockage local, par appareil) du reste (synchronisé via Exchange).
+    // Splits attachments (local storage, per device) from the rest (synced via Exchange).
     const attachStore = {};
     const coreTemplates = templates.map((t) => {
       attachStore[t.id] = t.attachments || [];
@@ -626,14 +732,14 @@
           const isSizeLimit = res.error && res.error.code === 9057;
           setStatus(
             isSizeLimit
-              ? "Impossible d'enregistrer : la limite de stockage (32 Ko) est atteinte. Supprime un modèle ou raccourcis les textes."
-              : "Erreur de sauvegarde : " + (res.error ? res.error.message : "inconnue"),
+              ? "Couldn't save: storage limit (32 KB) reached. Delete a template or shorten some text."
+              : "Save error: " + (res.error ? res.error.message : "unknown"),
             true
           );
         }
       });
     } catch (e) {
-      setStatus("Erreur de sauvegarde : " + e.message, true);
+      setStatus("Save error: " + e.message, true);
     }
   }
 
@@ -649,7 +755,7 @@
     try {
       localStorage.setItem(ATTACH_STORAGE_KEY, JSON.stringify(store));
     } catch (e) {
-      setStatus("Pièce jointe non sauvegardée localement : " + e.message, true);
+      setStatus("Attachment not saved locally: " + e.message, true);
     }
   }
 
@@ -669,7 +775,7 @@
       case "modified-asc": return list.sort((a, b) => a.updatedAt - b.updatedAt);
       case "alpha":
       default:
-        return list.sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
+        return list.sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
     }
   }
 
@@ -694,12 +800,12 @@
     sortedTemplates().forEach((t) => {
       const card = document.createElement("div");
       card.className = "template";
-      card.title = isComposeMode() ? "Cliquer pour insérer dans le mail" : "Cliquer pour créer un nouveau mail";
+      card.title = isComposeMode() ? "Click to insert into this email" : "Click to create a new email";
       card.innerHTML = `
         <div class="template-top">
           <p class="template-name"></p>
-          <button class="template-icon-btn btn-edit" title="Modifier">✎</button>
-          <button class="template-icon-btn danger btn-delete" title="Supprimer">🗑</button>
+          <button class="template-icon-btn btn-edit" title="Edit">✎</button>
+          <button class="template-icon-btn danger btn-delete" title="Delete">🗑</button>
         </div>
         <p class="template-preview"></p>
       `;
@@ -716,10 +822,10 @@
         card.appendChild(meta);
       }
 
-      // Toute la carte est cliquable pour insérer le modèle...
+      // The whole card is clickable to insert the template...
       card.addEventListener("click", () => insertTemplate(t));
 
-      // ...sauf les icônes modifier/supprimer, qui ne doivent pas déclencher l'insertion.
+      // ...except the edit/delete icons, which shouldn't trigger insertion.
       const editBtn = card.querySelector(".btn-edit");
       const deleteBtn = card.querySelector(".btn-delete");
       editBtn.addEventListener("click", (e) => { e.stopPropagation(); openForm(t); });
@@ -757,7 +863,7 @@
     formAttachments.forEach((a, index) => {
       const chip = document.createElement("div");
       chip.className = "attach-chip";
-      chip.innerHTML = `<span></span><button type="button" title="Retirer">✕</button>`;
+      chip.innerHTML = `<span></span><button type="button" title="Remove">✕</button>`;
       chip.querySelector("span").textContent = a.name;
       chip.querySelector("button").addEventListener("click", () => {
         formAttachments.splice(index, 1);
@@ -774,12 +880,12 @@
     files.forEach((file) => {
       const reader = new FileReader();
       reader.onload = () => {
-        // reader.result est "data:<mime>;base64,<data>" — on ne garde que la partie utile
+        // reader.result is "data:<mime>;base64,<data>" — we only keep the useful part
         const base64 = String(reader.result).split(",")[1] || "";
         formAttachments.push({ name: file.name, base64 });
         renderAttachList();
       };
-      reader.onerror = () => setStatus(`Impossible de lire le fichier « ${file.name} ».`, true);
+      reader.onerror = () => setStatus(`Couldn't read file "${file.name}".`, true);
       reader.readAsDataURL(file);
     });
   }
@@ -793,7 +899,7 @@
     const subject = document.getElementById("fSubject").value.trim();
     const body = document.getElementById("fBody").value;
 
-    if (!name) { setStatus("Donne un nom au modèle.", true); return; }
+    if (!name) { setStatus("Give this template a name.", true); return; }
 
     const now = Date.now();
     if (editingId) {
@@ -805,11 +911,11 @@
     saveTemplates();
     renderList();
     closeForm();
-    setStatus("Modèle enregistré.");
+    setStatus("Template saved.");
   }
 
-  // Nettoie ce que la personne tape dans le champ "Raccourci" : enlève les ## éventuels,
-  // les espaces, met en minuscules, pour que ##Signature et ##signature soient équivalents.
+  // Cleans up what's typed in the "Shortcut" field: strips leading ##, trims spaces, lowercases,
+  // so ##Signature and ##signature are treated as equivalent.
   function normalizeShortcut(text) {
     if (!text) return "";
     return text.trim().replace(/^#+/, "").toLowerCase().replace(/\s+/g, "");
@@ -819,26 +925,26 @@
     templates = templates.filter((t) => t.id !== id);
     saveTemplates();
     renderList();
-    setStatus("Modèle supprimé.");
+    setStatus("Template deleted.");
   }
 
-  // Transforme "a@x.com, b@y.com ; c@z.com" en tableau d'adresses propres
+  // Turns "a@x.com, b@y.com ; c@z.com" into a clean array of addresses
   function parseRecipients(text) {
     if (!text) return [];
     return text.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
   }
 
-  // En rédaction, item.subject est un objet avec setAsync. En lecture (boîte de réception),
-  // item.subject est une simple chaîne de caractères. On s'en sert pour savoir dans quel
-  // contexte on se trouve, sans que tu aies besoin de le préciser toi-même.
+  // In compose mode, item.subject is an object with setAsync. In read mode (inbox),
+  // item.subject is a plain string. We use this to detect which context we're in,
+  // without you needing to specify it yourself.
   function isComposeMode() {
     const item = Office.context.mailbox.item;
     return !!(item && item.subject && typeof item.subject === "object");
   }
 
-  // Ouvre la fenêtre "Choisis une date" et renvoie une Promise résolue avec la date choisie
-  // (format JJ/MM/AAAA), ou null si annulé. Le calendrier natif s'ouvre déjà sur le mois en
-  // cours avec aujourd'hui en surbrillance — comportement natif du navigateur, rien à coder pour ça.
+  // Opens the "Pick a date" modal and returns a Promise resolved with the chosen date
+  // (DD/MM/YYYY format), or null if cancelled. The native picker already opens on the
+  // current month with today highlighted — built-in browser behavior, nothing to code for it.
   function promptForCalendarDate() {
     return new Promise((resolve) => {
       const overlay = document.getElementById("calendarModalOverlay");
@@ -855,10 +961,10 @@
         cancelBtn.removeEventListener("click", onCancel);
       }
       function onConfirm() {
-        if (!input.value) { return; } // ne fait rien tant qu'aucune date n'est choisie
+        if (!input.value) { return; } // do nothing until a date is chosen
         const [y, m, d] = input.value.split("-").map(Number);
         cleanup();
-        resolve(formatDateFR(new Date(y, m - 1, d)));
+        resolve(formatDate(new Date(y, m - 1, d)));
       }
       function onCancel() {
         cleanup();
@@ -873,16 +979,16 @@
     let subjectRaw = resolveShortcuts(t.subject || "");
     let bodyRaw = resolveShortcuts(t.body || "");
 
-    // {{calendar}} : demande une date au moment de l'insertion, remplace toutes les
-    // occurrences (objet + corps) par la date choisie une fois pour toutes.
-    if (subjectRaw.includes("{{calendar}}") || bodyRaw.includes("{{calendar}}")) {
+    // {{c}}: asks for a date at insertion time, replaces every occurrence
+    // (subject + body) with the chosen date, once.
+    if (subjectRaw.includes("{{c}}") || bodyRaw.includes("{{c}}")) {
       const chosen = await promptForCalendarDate();
       if (chosen === null) {
-        setStatus("Insertion annulée.");
+        setStatus("Insertion cancelled.");
         return;
       }
-      subjectRaw = subjectRaw.replaceAll("{{calendar}}", chosen);
-      bodyRaw = bodyRaw.replaceAll("{{calendar}}", chosen);
+      subjectRaw = subjectRaw.replaceAll("{{c}}", chosen);
+      bodyRaw = bodyRaw.replaceAll("{{c}}", chosen);
     }
 
     const subject = applyPlaceholders(subjectRaw);
@@ -893,13 +999,12 @@
     const attachments = t.attachments || [];
 
     if (isComposeMode()) {
-      // Un mail est déjà ouvert en rédaction : on remplit ce mail-là (pièces jointes incluses).
+      // An email is already open for editing: fill that one in (attachments included).
       insertIntoOpenDraft(subject, bodyHtml, toList, ccList, bccList, attachments, t.name);
     } else {
-      // Aucun mail en cours de rédaction (tu es dans ta boîte de réception) :
-      // on crée directement un nouveau mail entièrement pré-rempli.
-      // Limite technique d'Outlook : les pièces jointes stockées localement ne peuvent pas être
-      // ajoutées automatiquement à un mail créé de cette façon (seulement à un brouillon déjà ouvert).
+      // No draft currently open (you're in the inbox): create a brand new, fully
+      // pre-filled email. Outlook API limitation: locally stored attachments can't be
+      // added automatically to an email created this way (only to an already-open draft).
       Office.context.mailbox.displayNewMessageForm({
         toRecipients: toList,
         ccRecipients: ccList,
@@ -908,9 +1013,9 @@
         htmlBody: bodyHtml
       });
       if (attachments.length > 0) {
-        setStatus(`Nouveau mail créé depuis « ${t.name} » — ajoute les ${attachments.length} pièce(s) jointe(s) à la main.`);
+        setStatus(`New email created from "${t.name}" — add the ${attachments.length} attachment(s) manually.`);
       } else {
-        setStatus(`Nouveau mail créé depuis « ${t.name} ».`);
+        setStatus(`New email created from "${t.name}".`);
       }
     }
   }
@@ -940,7 +1045,7 @@
     });
 
     const addAttachments = () => {
-      // Ajoutées une par une, dans l'ordre, pour éviter de surcharger l'API
+      // Added one at a time, in order, to avoid overloading the API
       return attachments.reduce((chain, a) => {
         return chain.then(() => new Promise((resolve, reject) => {
           item.addFileAttachmentFromBase64Async(
@@ -962,8 +1067,8 @@
       .then(() => setField(item.bcc, bccList))
       .then(setBody)
       .then(addAttachments)
-      .then(() => setStatus(`Modèle « ${name} » inséré${attachments.length ? ` (${attachments.length} pièce(s) jointe(s))` : ""}.`))
-      .catch((err) => setStatus("Erreur à l'insertion : " + (err ? err.message : "inconnue"), true));
+      .then(() => setStatus(`Template "${name}" inserted${attachments.length ? ` (${attachments.length} attachment(s))` : ""}.`))
+      .catch((err) => setStatus("Insert error: " + (err ? err.message : "unknown"), true));
   }
 
   function applyOfficeTheme() {
@@ -971,7 +1076,7 @@
     try {
       const theme = Office.context.officeTheme;
       if (theme && theme.bodyBackgroundColor) {
-        // Convertit la couleur de fond fournie par Outlook en luminosité pour savoir si le thème est sombre
+        // Converts the background color provided by Outlook into brightness, to know if the theme is dark
         const hex = theme.bodyBackgroundColor.replace("#", "");
         const r = parseInt(hex.substring(0, 2), 16);
         const g = parseInt(hex.substring(2, 4), 16);
@@ -979,7 +1084,7 @@
         const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
         isDark = luminance < 0.5;
       } else {
-        // Repli si Outlook ne fournit pas de thème : on suit les préférences du système
+        // Fallback if Outlook doesn't provide a theme: follow the system preference
         isDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
       }
     } catch (e) {
@@ -988,8 +1093,8 @@
     document.body.setAttribute("data-theme", isDark ? "dark" : "light");
   }
 
-  // Insère du texte à l'endroit du curseur dans un champ texte/textarea, en remplaçant
-  // la sélection en cours s'il y en a une.
+  // Inserts text at the cursor position in a text field/textarea, replacing the current
+  // selection if there is one.
   function insertAtCursor(fieldEl, text) {
     const start = fieldEl.selectionStart ?? fieldEl.value.length;
     const end = fieldEl.selectionEnd ?? fieldEl.value.length;
@@ -999,8 +1104,8 @@
     fieldEl.setSelectionRange(newPos, newPos);
   }
 
-  // Cherche les ##raccourcis tapés directement dans un mail déjà ouvert (objet + corps)
-  // et les remplace par le contenu du modèle correspondant, avec les balises de date résolues.
+  // Finds ##shortcuts typed directly in an already-open email (subject + body) and replaces
+  // them with the matching template's content, with date tags resolved too.
   function resolveShortcutsInCurrentEmail() {
     const item = Office.context.mailbox.item;
 
@@ -1037,12 +1142,12 @@
     Promise.all([processSubject(), processBody()])
       .then(([subjectChanged, bodyChanged]) => {
         if (subjectChanged || bodyChanged) {
-          setStatus("Raccourcis traités.");
+          setStatus("Shortcuts resolved.");
         } else {
-          setStatus("Aucun ##raccourci trouvé dans ce mail.");
+          setStatus("No ##shortcut found in this email.");
         }
       })
-      .catch((err) => setStatus("Erreur : " + (err ? err.message : "inconnue"), true));
+      .catch((err) => setStatus("Error: " + (err ? err.message : "unknown"), true));
   }
 
   Office.onReady(() => {
@@ -1066,45 +1171,128 @@
       handleAttachmentPick(e.target.files);
     });
 
-    // Retient quel champ (objet ou corps) avait le focus, pour savoir où insérer la date choisie
+    // Remembers which field (subject or body) had focus, to know where to insert the chosen date
     ["fSubject", "fBody"].forEach((id) => {
       document.getElementById(id).addEventListener("focus", () => { lastFocusedFieldId = id; });
     });
 
-    // Bouton 📅 sur l'objet et sur le corps : ouvre le popover calendrier
-    const popover = document.getElementById("calendarPopover");
-    const popoverInput = document.getElementById("calendarPopoverInput");
-    let calendarTargetId = "fBody";
+    // ⚡ button on subject and body: opens the tag menu
+    const tagMenu = document.getElementById("tagMenu");
+    const tagMenuList = document.getElementById("tagMenuList");
+    const tagMenuDay = document.getElementById("tagMenuDay");
+    const tagMenuWeek = document.getElementById("tagMenuWeek");
+    let tagMenuTargetId = "fBody";
+
+    function closeTagMenu() {
+      tagMenu.classList.add("hidden");
+      tagMenuDay.classList.add("hidden");
+      tagMenuWeek.classList.add("hidden");
+      tagMenuList.classList.remove("hidden");
+    }
 
     document.querySelectorAll(".btn-calendar").forEach((btn) => {
       btn.addEventListener("click", (e) => {
-        calendarTargetId = btn.dataset.target;
-        popoverInput.valueAsDate = new Date();
-        popover.classList.remove("hidden");
-        // Positionne le popover juste sous le bouton cliqué
+        e.stopPropagation();
+        tagMenuTargetId = btn.dataset.target;
+        tagMenuDay.classList.add("hidden");
+        tagMenuWeek.classList.add("hidden");
+        tagMenuList.classList.remove("hidden");
+        tagMenu.classList.remove("hidden");
+        // Positions the menu right under the clicked button
         const rect = btn.getBoundingClientRect();
         const parentRect = btn.closest(".form").getBoundingClientRect();
-        popover.style.top = (rect.bottom - parentRect.top + document.getElementById("form").scrollTop + 4) + "px";
-        popover.style.right = "16px";
-        btn.closest(".form").appendChild(popover);
-        popover.classList.remove("hidden");
+        tagMenu.style.top = (rect.bottom - parentRect.top + document.getElementById("form").scrollTop + 4) + "px";
+        tagMenu.style.right = "16px";
+        btn.closest(".form").appendChild(tagMenu);
       });
     });
 
-    document.getElementById("calendarPopoverCancel").addEventListener("click", () => {
-      popover.classList.add("hidden");
+    // Closes the menu when clicking anywhere outside it
+    document.addEventListener("click", (e) => {
+      if (!tagMenu.classList.contains("hidden") && !tagMenu.contains(e.target) && !e.target.classList.contains("btn-calendar")) {
+        closeTagMenu();
+      }
     });
 
-    document.getElementById("calendarPopoverInsert").addEventListener("click", () => {
-      if (!popoverInput.value) { setStatus("Choisis d'abord une date.", true); return; }
-      const [y, m, d] = popoverInput.value.split("-").map(Number);
-      const localDate = new Date(y, m - 1, d);
-      const field = document.getElementById(calendarTargetId);
-      insertAtCursor(field, formatDateFR(localDate));
-      popover.classList.add("hidden");
+    // "Day" sub-view
+    const dayDirection = document.getElementById("dayDirection");
+    const dayOffset = document.getElementById("dayOffset");
+    const dayBusinessOnly = document.getElementById("dayBusinessOnly");
+    const dayPreview = document.getElementById("dayPreview");
+
+    function updateDayPreview() {
+      const dir = dayDirection.value;
+      const n = Math.max(0, parseInt(dayOffset.value || "0", 10));
+      const signed = dir === "-" ? -n : n;
+      const businessOnly = dayBusinessOnly.checked;
+      const dateStr = businessOnly ? businessDayOffsetStr(signed) : offsetDateStr(signed);
+      const label = n === 0 ? "Today" : `${n} ${businessOnly ? "business " : ""}day(s) ${dir === "+" ? "ahead" : "ago"}`;
+      dayPreview.textContent = `${label} — ${dateStr}`;
+    }
+
+    document.getElementById("tagItemDay").addEventListener("click", () => {
+      tagMenuList.classList.add("hidden");
+      tagMenuDay.classList.remove("hidden");
+      updateDayPreview();
+    });
+    document.getElementById("dayBack").addEventListener("click", () => {
+      tagMenuDay.classList.add("hidden");
+      tagMenuList.classList.remove("hidden");
+    });
+    [dayDirection, dayOffset, dayBusinessOnly].forEach((el) => {
+      el.addEventListener("input", updateDayPreview);
+      el.addEventListener("change", updateDayPreview);
+    });
+    document.getElementById("dayInsert").addEventListener("click", () => {
+      const dir = dayDirection.value;
+      const n = Math.max(0, parseInt(dayOffset.value || "0", 10));
+      const businessOnly = dayBusinessOnly.checked;
+      const tag = n === 0 ? "{{d}}" : `{{${businessOnly ? "bd" : "d"}${dir}${n}}}`;
+      insertAtCursor(document.getElementById(tagMenuTargetId), tag);
+      closeTagMenu();
     });
 
-    // Le bouton "Traiter les raccourcis ##" n'a de sens que dans un mail déjà ouvert en rédaction
+    // "Week" sub-view
+    const weekDirection = document.getElementById("weekDirection");
+    const weekOffset = document.getElementById("weekOffset");
+    const weekPreview = document.getElementById("weekPreview");
+
+    function updateWeekPreview() {
+      const dir = weekDirection.value;
+      const n = Math.max(0, parseInt(weekOffset.value || "0", 10));
+      const signed = dir === "-" ? -n : n;
+      const label = n === 0 ? "This week" : `${n} week(s) ${dir === "+" ? "ahead" : "ago"}`;
+      weekPreview.textContent = `${label} — W${weekOffsetStr(signed)}`;
+    }
+
+    document.getElementById("tagItemWeek").addEventListener("click", () => {
+      tagMenuList.classList.add("hidden");
+      tagMenuWeek.classList.remove("hidden");
+      updateWeekPreview();
+    });
+    document.getElementById("weekBack").addEventListener("click", () => {
+      tagMenuWeek.classList.add("hidden");
+      tagMenuList.classList.remove("hidden");
+    });
+    [weekDirection, weekOffset].forEach((el) => {
+      el.addEventListener("input", updateWeekPreview);
+      el.addEventListener("change", updateWeekPreview);
+    });
+    document.getElementById("weekInsert").addEventListener("click", () => {
+      const dir = weekDirection.value;
+      const n = Math.max(0, parseInt(weekOffset.value || "0", 10));
+      const tag = n === 0 ? "{{w}}" : `{{w${dir}${n}}}`;
+      insertAtCursor(document.getElementById(tagMenuTargetId), tag);
+      closeTagMenu();
+    });
+
+    // "Calendar" item: inserts {{c}} directly, no sub-view
+    document.getElementById("tagItemCalendar").addEventListener("click", () => {
+      insertAtCursor(document.getElementById(tagMenuTargetId), "{{c}}");
+      closeTagMenu();
+    });
+
+    // The "Resolve ## shortcuts" button only makes sense in an already-open draft
     if (isComposeMode()) {
       const btnResolve = document.getElementById("btnResolveShortcuts");
       btnResolve.classList.remove("hidden");
