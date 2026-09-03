@@ -419,6 +419,31 @@
     margin-top: 12px;
   }
 
+  .reminder-file-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+  .reminder-file-row span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1 1 100%;
+    min-width: 0;
+    font-weight: 600;
+  }
+  .reminder-file-row button {
+    flex: 1 1 auto;
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+
   .hidden { display: none !important; }
 </style>
 </head>
@@ -578,6 +603,19 @@
     <div class="modal-actions">
       <button class="ghost" id="calendarModalCancel">Cancel</button>
       <button class="primary" id="calendarModalConfirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Attachment reminder: shown when a new email was created from the inbox and the template
+     had attachments that couldn't be added automatically (Outlook API limitation). -->
+<div id="attachmentReminderOverlay" class="modal-overlay hidden">
+  <div class="modal-card" style="width: 280px;">
+    <h3>Don't forget the attachment(s)</h3>
+    <p id="attachmentReminderNote" style="font-size:12px; color: var(--ink-soft); margin: 0 0 10px;"></p>
+    <div id="attachmentReminderList"></div>
+    <div class="modal-actions">
+      <button class="primary" id="attachmentReminderClose">Got it</button>
     </div>
   </div>
 </div>
@@ -1027,11 +1065,95 @@
         htmlBody: bodyHtml
       });
       if (attachments.length > 0) {
-        setStatus(`New email created from "${t.name}" — add the ${attachments.length} attachment(s) manually.`);
+        setStatus(`New email created from "${t.name}".`);
+        showAttachmentReminder(attachments, { canAttach: false });
       } else {
         setStatus(`New email created from "${t.name}".`);
       }
     }
+  }
+
+  // Triggers a real browser download of a base64-stored attachment.
+  function downloadBase64File(name, base64) {
+    try {
+      const byteChars = atob(base64);
+      const byteNumbers = new Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+      const blob = new Blob([new Uint8Array(byteNumbers)], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (e) {
+      setStatus(`Couldn't download "${name}": ${e.message}`, true);
+    }
+  }
+
+  // Shows the "don't forget the attachment(s)" modal, with a download button per file.
+  // Shows the "don't forget the attachment(s)" modal. Each row offers downloading the blank
+  // reference file, and — when canAttach is true (an already-open draft, so the API allows
+  // it) — importing and attaching your real, final version instead of the blank one.
+  function showAttachmentReminder(attachments, options) {
+    options = options || {};
+    const canAttach = !!options.canAttach;
+    const onAttach = options.onAttach;
+
+    const overlay = document.getElementById("attachmentReminderOverlay");
+    const list = document.getElementById("attachmentReminderList");
+    const note = document.getElementById("attachmentReminderNote");
+    note.textContent = canAttach
+      ? "These are blank placeholders. Download for reference, or import your final version to attach it directly."
+      : "This new email was created in a separate window, so nothing can be attached automatically. Download the blank file for reference, then attach your final version yourself.";
+    list.innerHTML = "";
+
+    attachments.forEach((a) => {
+      const row = document.createElement("div");
+      row.className = "reminder-file-row";
+      row.innerHTML = `
+        <span></span>
+        <button type="button" class="btn-download">Download blank</button>
+        ${canAttach ? `<button type="button" class="btn-import">Import final</button><input type="file" class="hidden-file-input hidden" />` : ""}
+      `;
+      row.querySelector("span").textContent = a.name;
+      row.querySelector(".btn-download").addEventListener("click", () => downloadBase64File(a.name, a.base64));
+
+      if (canAttach) {
+        const importBtn = row.querySelector(".btn-import");
+        const fileInput = row.querySelector(".hidden-file-input");
+        importBtn.addEventListener("click", () => fileInput.click());
+        fileInput.addEventListener("change", () => {
+          const file = fileInput.files[0];
+          if (!file) return;
+          importBtn.disabled = true;
+          importBtn.textContent = "Attaching…";
+          const reader = new FileReader();
+          reader.onload = async () => {
+            const base64 = String(reader.result).split(",")[1] || "";
+            try {
+              await onAttach(file.name, base64);
+              importBtn.textContent = `✓ Attached: ${file.name}`;
+            } catch (err) {
+              importBtn.disabled = false;
+              importBtn.textContent = "Import final";
+              setStatus(`Couldn't attach "${file.name}": ${err ? err.message : "unknown error"}`, true);
+            }
+          };
+          reader.onerror = () => {
+            importBtn.disabled = false;
+            importBtn.textContent = "Import final";
+            setStatus(`Couldn't read "${file.name}".`, true);
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      list.appendChild(row);
+    });
+    overlay.classList.remove("hidden");
   }
 
   function insertIntoOpenDraft(subject, bodyHtml, toList, ccList, bccList, attachments, name) {
@@ -1058,30 +1180,27 @@
       );
     });
 
-    const addAttachments = () => {
-      // Added one at a time, in order, to avoid overloading the API
-      return attachments.reduce((chain, a) => {
-        return chain.then(() => new Promise((resolve, reject) => {
-          item.addFileAttachmentFromBase64Async(
-            a.base64,
-            a.name,
-            { isInline: false },
-            (res) => {
-              if (res.status === Office.AsyncResultStatus.Succeeded) resolve();
-              else reject(res.error);
-            }
-          );
-        }));
-      }, Promise.resolve());
-    };
-
     setField(item.subject, subject)
       .then(() => setField(item.to, toList))
       .then(() => setField(item.cc, ccList))
       .then(() => setField(item.bcc, bccList))
       .then(setBody)
-      .then(addAttachments)
-      .then(() => setStatus(`Template "${name}" inserted${attachments.length ? ` (${attachments.length} attachment(s))` : ""}.`))
+      .then(() => {
+        setStatus(`Template "${name}" inserted.`);
+        // Attachments are blank placeholders meant as reminders, not final files — offer to
+        // download the blank version and attach a real one, instead of auto-attaching the blank.
+        if (attachments.length > 0) {
+          showAttachmentReminder(attachments, {
+            canAttach: true,
+            onAttach: (fileName, base64) => new Promise((resolve, reject) => {
+              item.addFileAttachmentFromBase64Async(base64, fileName, { isInline: false }, (res) => {
+                if (res.status === Office.AsyncResultStatus.Succeeded) resolve();
+                else reject(res.error);
+              });
+            })
+          });
+        }
+      })
       .catch((err) => setStatus("Insert error: " + (err ? err.message : "unknown"), true));
   }
 
@@ -1122,6 +1241,28 @@
   // them with the matching template's content, with date tags resolved too. If {{c}} shows up
   // after resolving shortcuts, prompts for a date once and applies it to both fields — same
   // behavior as inserting a template directly.
+  // Recursively finds every ##shortcut in text and collects the attachments of the
+  // templates they reference (deduplicated, in case the same shortcut is used twice).
+  function collectShortcutAttachments(text, maxDepth, seenIds) {
+    if (maxDepth === undefined) maxDepth = 5;
+    if (seenIds === undefined) seenIds = new Set();
+    if (maxDepth <= 0 || !text) return [];
+
+    let result = [];
+    const matches = [...text.matchAll(/##(\w+)/g)];
+    matches.forEach((m) => {
+      const key = m[1].toLowerCase();
+      const found = templates.find((t) => t.shortcut && t.shortcut === key);
+      if (!found || seenIds.has(found.id)) return;
+      seenIds.add(found.id);
+      if (found.attachments && found.attachments.length > 0) {
+        result = result.concat(found.attachments);
+      }
+      result = result.concat(collectShortcutAttachments(found.body || "", maxDepth - 1, seenIds));
+    });
+    return result;
+  }
+
   async function resolveShortcutsInCurrentEmail() {
     const item = Office.context.mailbox.item;
 
@@ -1174,6 +1315,22 @@
 
       if (subjectChanged) await setSubject(updatedSubject);
       if (bodyChanged) await setBody(updatedBody);
+
+      // Unlike inserting a template directly, ##shortcuts only carry text — the referenced
+      // templates' attachments are blank placeholders, so we offer the same "download blank /
+      // import your final version" reminder instead of auto-attaching them.
+      const attachmentsToAdd = collectShortcutAttachments(originalSubject + "\n" + originalBody);
+      if (attachmentsToAdd.length > 0) {
+        showAttachmentReminder(attachmentsToAdd, {
+          canAttach: true,
+          onAttach: (fileName, base64) => new Promise((resolve, reject) => {
+            item.addFileAttachmentFromBase64Async(base64, fileName, { isInline: false }, (res) => {
+              if (res.status === Office.AsyncResultStatus.Succeeded) resolve();
+              else reject(res.error);
+            });
+          })
+        });
+      }
 
       setStatus(subjectChanged || bodyChanged ? "Shortcuts resolved." : "No ##shortcut found in this email.");
     } catch (err) {
@@ -1329,6 +1486,10 @@
       btnResolve.classList.remove("hidden");
       btnResolve.addEventListener("click", resolveShortcutsInCurrentEmail);
     }
+
+    document.getElementById("attachmentReminderClose").addEventListener("click", () => {
+      document.getElementById("attachmentReminderOverlay").classList.add("hidden");
+    });
   });
 </script>
 
