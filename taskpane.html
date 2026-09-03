@@ -228,34 +228,48 @@
   /* Attachments */
   .attach-row {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 6px;
   }
   .attach-chip {
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    gap: 5px;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
     font-size: 11.5px;
     background: var(--accent-soft);
     color: var(--accent);
-    border-radius: 5px;
-    padding: 3px 6px 3px 8px;
-    max-width: 100%;
+    border-radius: 6px;
+    padding: 5px 8px;
   }
-  .attach-chip span {
+  .attach-chip .attach-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 160px;
+    flex: 1 1 100%;
+    font-weight: 600;
+  }
+  .attach-chip .attach-final-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1 1 auto;
+    cursor: pointer;
+  }
+  .attach-chip .attach-final-label input[type="checkbox"] {
+    width: auto;
+    flex: 0 0 auto;
+    margin: 0;
   }
   .attach-chip button {
     border: none;
     background: none;
     padding: 0 2px;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--accent);
     line-height: 1;
+    flex: 0 0 auto;
   }
   .attach-hint {
     font-size: 11px;
@@ -753,7 +767,12 @@
     // Attachments stay local (too large for RoamingSettings' 32 KB limit); reattached here
     // to the matching templates for display/insertion.
     const attachStore = loadAttachmentStore();
-    templates.forEach((t) => { t.attachments = attachStore[t.id] || []; });
+    templates.forEach((t) => {
+      t.attachments = attachStore[t.id] || [];
+      // Attachments saved before the "final vs blank" checkbox existed default to blank
+      // (the more common case), matching prior behavior.
+      t.attachments.forEach((a) => { if (a.final === undefined) a.final = false; });
+    });
 
     // Templates created before sorting was added: give them fallback dates derived from
     // their id (a timestamp), so sorting still works.
@@ -915,8 +934,18 @@
     formAttachments.forEach((a, index) => {
       const chip = document.createElement("div");
       chip.className = "attach-chip";
-      chip.innerHTML = `<span></span><button type="button" title="Remove">✕</button>`;
-      chip.querySelector("span").textContent = a.name;
+      chip.innerHTML = `
+        <span class="attach-name"></span>
+        <label class="attach-final-label">
+          <input type="checkbox" ${a.final ? "checked" : ""} />
+          Final document (attach as-is)
+        </label>
+        <button type="button" title="Remove">✕</button>
+      `;
+      chip.querySelector(".attach-name").textContent = a.name;
+      chip.querySelector('input[type="checkbox"]').addEventListener("change", (e) => {
+        a.final = e.target.checked;
+      });
       chip.querySelector("button").addEventListener("click", () => {
         formAttachments.splice(index, 1);
         renderAttachList();
@@ -934,7 +963,9 @@
       reader.onload = () => {
         // reader.result is "data:<mime>;base64,<data>" — we only keep the useful part
         const base64 = String(reader.result).split(",")[1] || "";
-        formAttachments.push({ name: file.name, base64 });
+        // final=false by default: assumed to be a blank placeholder to complete, matching
+        // the most common use case — toggle the checkbox for files that are ready as-is.
+        formAttachments.push({ name: file.name, base64, final: false });
         renderAttachList();
       };
       reader.onerror = () => setStatus(`Couldn't read file "${file.name}".`, true);
@@ -1180,25 +1211,31 @@
       );
     });
 
+    const attachOne = (a) => new Promise((resolve, reject) => {
+      item.addFileAttachmentFromBase64Async(a.base64, a.name, { isInline: false }, (res) => {
+        if (res.status === Office.AsyncResultStatus.Succeeded) resolve();
+        else reject(res.error);
+      });
+    });
+
     setField(item.subject, subject)
       .then(() => setField(item.to, toList))
       .then(() => setField(item.cc, ccList))
       .then(() => setField(item.bcc, bccList))
       .then(setBody)
-      .then(() => {
-        setStatus(`Template "${name}" inserted.`);
-        // Attachments are blank placeholders meant as reminders, not final files — offer to
-        // download the blank version and attach a real one, instead of auto-attaching the blank.
-        if (attachments.length > 0) {
-          showAttachmentReminder(attachments, {
-            canAttach: true,
-            onAttach: (fileName, base64) => new Promise((resolve, reject) => {
-              item.addFileAttachmentFromBase64Async(base64, fileName, { isInline: false }, (res) => {
-                if (res.status === Office.AsyncResultStatus.Succeeded) resolve();
-                else reject(res.error);
-              });
-            })
-          });
+      .then(async () => {
+        // "Final" attachments are ready to send as-is: attach them directly, no detour needed.
+        const finalAttachments = attachments.filter((a) => a.final);
+        const blankAttachments = attachments.filter((a) => !a.final);
+        for (const a of finalAttachments) await attachOne(a);
+
+        const parts = [`Template "${name}" inserted`];
+        if (finalAttachments.length > 0) parts.push(`${finalAttachments.length} attachment(s) added`);
+        setStatus(parts.join(", ") + ".");
+
+        // Blank placeholders still get the download/import reminder.
+        if (blankAttachments.length > 0) {
+          showAttachmentReminder(blankAttachments, { canAttach: true, onAttach: (fileName, base64) => attachOne({ name: fileName, base64 }) });
         }
       })
       .catch((err) => setStatus("Insert error: " + (err ? err.message : "unknown"), true));
@@ -1316,23 +1353,26 @@
       if (subjectChanged) await setSubject(updatedSubject);
       if (bodyChanged) await setBody(updatedBody);
 
-      // Unlike inserting a template directly, ##shortcuts only carry text — the referenced
-      // templates' attachments are blank placeholders, so we offer the same "download blank /
-      // import your final version" reminder instead of auto-attaching them.
-      const attachmentsToAdd = collectShortcutAttachments(originalSubject + "\n" + originalBody);
-      if (attachmentsToAdd.length > 0) {
-        showAttachmentReminder(attachmentsToAdd, {
-          canAttach: true,
-          onAttach: (fileName, base64) => new Promise((resolve, reject) => {
-            item.addFileAttachmentFromBase64Async(base64, fileName, { isInline: false }, (res) => {
-              if (res.status === Office.AsyncResultStatus.Succeeded) resolve();
-              else reject(res.error);
-            });
-          })
+      // Referenced templates' attachments: "final" ones are attached directly, blank
+      // placeholders get the download/import reminder instead.
+      const attachOne = (a) => new Promise((resolve, reject) => {
+        item.addFileAttachmentFromBase64Async(a.base64, a.name, { isInline: false }, (res) => {
+          if (res.status === Office.AsyncResultStatus.Succeeded) resolve();
+          else reject(res.error);
         });
+      });
+      const allAttachments = collectShortcutAttachments(originalSubject + "\n" + originalBody);
+      const finalAttachments = allAttachments.filter((a) => a.final);
+      const blankAttachments = allAttachments.filter((a) => !a.final);
+      for (const a of finalAttachments) await attachOne(a);
+      if (blankAttachments.length > 0) {
+        showAttachmentReminder(blankAttachments, { canAttach: true, onAttach: (fileName, base64) => attachOne({ name: fileName, base64 }) });
       }
 
-      setStatus(subjectChanged || bodyChanged ? "Shortcuts resolved." : "No ##shortcut found in this email.");
+      const parts = [];
+      parts.push(subjectChanged || bodyChanged ? "Shortcuts resolved" : "No ##shortcut found in this email");
+      if (finalAttachments.length > 0) parts.push(`${finalAttachments.length} attachment(s) added`);
+      setStatus(parts.join(", ") + ".");
     } catch (err) {
       setStatus("Error: " + (err ? err.message : "unknown"), true);
     }
