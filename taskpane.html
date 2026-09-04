@@ -560,7 +560,7 @@
       </div>
       <div class="tag-menu-item" id="tagItemDN">
         <span>Delivery note</span>
-        <span class="tag-menu-help" title="Inserts {{DN}} — asks for a delivery note number every time this template is used, formatted as DNXXXXXXXX.">?</span>
+        <span class="tag-menu-help" title="Inserts {{dn}} — asks for a delivery note number every time this template is used, formatted as DNXXXXXXXX.">?</span>
       </div>
     </div>
 
@@ -625,7 +625,7 @@
   </div>
 </div>
 
-<!-- "Delivery note number" modal: opens when inserting a template that contains {{DN}} -->
+<!-- "Delivery note number" modal: opens when inserting a template that contains {{dn}} -->
 <div id="dnModalOverlay" class="modal-overlay hidden">
   <div class="modal-card">
     <h3>Delivery note number</h3>
@@ -1131,16 +1131,16 @@
       bodyRaw = bodyRaw.replaceAll("{{c}}", chosen);
     }
 
-    // {{DN}}: asks for a delivery note number at insertion time, replaces every occurrence
+    // {{dn}}: asks for a delivery note number at insertion time, replaces every occurrence
     // with "DNXXXXXXXX", once.
-    if (subjectRaw.includes("{{DN}}") || bodyRaw.includes("{{DN}}")) {
+    if (subjectRaw.includes("{{dn}}") || bodyRaw.includes("{{dn}}")) {
       const dn = await promptForDeliveryNote();
       if (dn === null) {
         setStatus("Insertion cancelled.");
         return;
       }
-      subjectRaw = subjectRaw.replaceAll("{{DN}}", dn);
-      bodyRaw = bodyRaw.replaceAll("{{DN}}", dn);
+      subjectRaw = subjectRaw.replaceAll("{{dn}}", dn);
+      bodyRaw = bodyRaw.replaceAll("{{dn}}", dn);
     }
 
     const subject = applyPlaceholders(subjectRaw);
@@ -1413,14 +1413,14 @@
         bodyRaw = bodyRaw.replaceAll("{{c}}", chosen);
       }
 
-      if (subjectRaw.includes("{{DN}}") || bodyRaw.includes("{{DN}}")) {
+      if (subjectRaw.includes("{{dn}}") || bodyRaw.includes("{{dn}}")) {
         const dn = await promptForDeliveryNote();
         if (dn === null) {
           setStatus("Cancelled.");
           return;
         }
-        subjectRaw = subjectRaw.replaceAll("{{DN}}", dn);
-        bodyRaw = bodyRaw.replaceAll("{{DN}}", dn);
+        subjectRaw = subjectRaw.replaceAll("{{dn}}", dn);
+        bodyRaw = bodyRaw.replaceAll("{{dn}}", dn);
       }
 
       const updatedSubject = applyPlaceholders(subjectRaw);
@@ -1599,9 +1599,9 @@
       closeTagMenu();
     });
 
-    // "Delivery note" item: inserts {{DN}} directly, no sub-view
+    // "Delivery note" item: inserts {{dn}} directly, no sub-view
     document.getElementById("tagItemDN").addEventListener("click", () => {
-      insertAtCursor(document.getElementById(tagMenuTargetId), "{{DN}}");
+      insertAtCursor(document.getElementById(tagMenuTargetId), "{{dn}}");
       closeTagMenu();
     });
 
