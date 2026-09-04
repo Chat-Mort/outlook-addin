@@ -558,6 +558,10 @@
         <span>Calendar</span>
         <span class="tag-menu-help" title="Inserts {{c}} — asks for a specific date every time this template is used, with a picker (today highlighted).">?</span>
       </div>
+      <div class="tag-menu-item" id="tagItemDN">
+        <span>Delivery note</span>
+        <span class="tag-menu-help" title="Inserts {{DN}} — asks for a delivery note number every time this template is used, formatted as DNXXXXXXXX.">?</span>
+      </div>
     </div>
 
     <!-- "Day" detail view -->
@@ -617,6 +621,21 @@
     <div class="modal-actions">
       <button class="ghost" id="calendarModalCancel">Cancel</button>
       <button class="primary" id="calendarModalConfirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- "Delivery note number" modal: opens when inserting a template that contains {{DN}} -->
+<div id="dnModalOverlay" class="modal-overlay hidden">
+  <div class="modal-card">
+    <h3>Delivery note number</h3>
+    <div style="display:flex; align-items:center; gap:6px;">
+      <span style="font-size:13px; color: var(--ink-soft);">DN</span>
+      <input type="text" id="dnModalInput" inputmode="numeric" placeholder="12345678" style="flex:1 1 auto; font-family: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; color: var(--ink); background: var(--card);" />
+    </div>
+    <div class="modal-actions">
+      <button class="ghost" id="dnModalCancel">Cancel</button>
+      <button class="primary" id="dnModalConfirm">Confirm</button>
     </div>
   </div>
 </div>
@@ -1058,6 +1077,44 @@
     });
   }
 
+  // Opens the "Delivery note number" modal and returns a Promise resolved with the formatted
+  // tag content "DNXXXXXXXX", or null if cancelled.
+  function promptForDeliveryNote() {
+    return new Promise((resolve) => {
+      const overlay = document.getElementById("dnModalOverlay");
+      const input = document.getElementById("dnModalInput");
+      const confirmBtn = document.getElementById("dnModalConfirm");
+      const cancelBtn = document.getElementById("dnModalCancel");
+
+      input.value = "";
+      overlay.classList.remove("hidden");
+      input.focus();
+
+      function cleanup() {
+        overlay.classList.add("hidden");
+        confirmBtn.removeEventListener("click", onConfirm);
+        cancelBtn.removeEventListener("click", onCancel);
+        input.removeEventListener("keydown", onKeydown);
+      }
+      function onConfirm() {
+        const value = input.value.trim();
+        if (!value) { return; } // do nothing until a number is entered
+        cleanup();
+        resolve("DN" + value);
+      }
+      function onCancel() {
+        cleanup();
+        resolve(null);
+      }
+      function onKeydown(e) {
+        if (e.key === "Enter") onConfirm();
+      }
+      confirmBtn.addEventListener("click", onConfirm);
+      cancelBtn.addEventListener("click", onCancel);
+      input.addEventListener("keydown", onKeydown);
+    });
+  }
+
   async function insertTemplate(t) {
     let subjectRaw = resolveShortcuts(t.subject || "", undefined, false, "subject");
     let bodyRaw = resolveShortcuts(t.body || "", undefined, false, "body");
@@ -1072,6 +1129,18 @@
       }
       subjectRaw = subjectRaw.replaceAll("{{c}}", chosen);
       bodyRaw = bodyRaw.replaceAll("{{c}}", chosen);
+    }
+
+    // {{DN}}: asks for a delivery note number at insertion time, replaces every occurrence
+    // with "DNXXXXXXXX", once.
+    if (subjectRaw.includes("{{DN}}") || bodyRaw.includes("{{DN}}")) {
+      const dn = await promptForDeliveryNote();
+      if (dn === null) {
+        setStatus("Insertion cancelled.");
+        return;
+      }
+      subjectRaw = subjectRaw.replaceAll("{{DN}}", dn);
+      bodyRaw = bodyRaw.replaceAll("{{DN}}", dn);
     }
 
     const subject = applyPlaceholders(subjectRaw);
@@ -1344,6 +1413,16 @@
         bodyRaw = bodyRaw.replaceAll("{{c}}", chosen);
       }
 
+      if (subjectRaw.includes("{{DN}}") || bodyRaw.includes("{{DN}}")) {
+        const dn = await promptForDeliveryNote();
+        if (dn === null) {
+          setStatus("Cancelled.");
+          return;
+        }
+        subjectRaw = subjectRaw.replaceAll("{{DN}}", dn);
+        bodyRaw = bodyRaw.replaceAll("{{DN}}", dn);
+      }
+
       const updatedSubject = applyPlaceholders(subjectRaw);
       const updatedBody = applyPlaceholders(bodyRaw);
 
@@ -1517,6 +1596,12 @@
     // "Calendar" item: inserts {{c}} directly, no sub-view
     document.getElementById("tagItemCalendar").addEventListener("click", () => {
       insertAtCursor(document.getElementById(tagMenuTargetId), "{{c}}");
+      closeTagMenu();
+    });
+
+    // "Delivery note" item: inserts {{DN}} directly, no sub-view
+    document.getElementById("tagItemDN").addEventListener("click", () => {
+      insertAtCursor(document.getElementById(tagMenuTargetId), "{{DN}}");
       closeTagMenu();
     });
 
