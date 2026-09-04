@@ -103,20 +103,6 @@
   }
   .sync-status.error { color: var(--danger); }
 
-  .shortcut-banner {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    background: var(--accent-soft);
-    color: var(--accent);
-    border-radius: 8px;
-    padding: 8px 10px;
-    margin-bottom: 12px;
-    font-size: 12px;
-  }
-  .shortcut-banner span { flex: 1 1 auto; }
-
   .search-input {
     width: 100%;
     font-family: inherit;
@@ -519,12 +505,6 @@
 <body>
 
 <main>
-  <div id="shortcutBanner" class="shortcut-banner hidden">
-    <span>This email has ##shortcuts to resolve.</span>
-    <button class="primary" id="bannerResolveBtn" style="padding:4px 8px; font-size:11.5px;">Resolve now</button>
-    <button class="ghost" id="bannerDismissBtn" style="padding:4px 6px; font-size:11.5px;">✕</button>
-  </div>
-
   <div class="list-head">
     <h2>Saved templates <span id="syncStatus" class="sync-status"></span></h2>
     <div style="display:flex; gap:6px;">
@@ -1769,9 +1749,10 @@
   }
 
   // Runs once when the panel opens in compose mode: if the draft (created from a native
-  // Outlook template, typically) already contains ##shortcuts, surface a banner instead of
-  // relying on remembering to click "Resolve ## shortcuts" manually every time.
-  async function detectUnresolvedShortcuts() {
+  // Outlook template, typically) already contains ##shortcuts, resolve them right away instead
+  // of relying on remembering to click "Resolve ## shortcuts" manually every time. The button
+  // stays available too, for anything typed afterward.
+  async function autoResolveShortcutsOnOpen() {
     const item = Office.context.mailbox.item;
     try {
       const [subject, bodyHtml] = await Promise.all([
@@ -1783,7 +1764,7 @@
         }))
       ]);
       if (/##\w+/.test(subject) || /##\w+/.test(bodyHtml)) {
-        document.getElementById("shortcutBanner").classList.remove("hidden");
+        await resolveShortcutsInCurrentEmail();
       }
     } catch (e) {
       // Non-critical: worst case, the person just uses the "Resolve" button manually.
@@ -2085,16 +2066,8 @@
       btnResolve.classList.remove("hidden");
       btnResolve.addEventListener("click", resolveShortcutsInCurrentEmail);
 
-      detectUnresolvedShortcuts();
+      autoResolveShortcutsOnOpen();
     }
-
-    document.getElementById("bannerResolveBtn").addEventListener("click", () => {
-      document.getElementById("shortcutBanner").classList.add("hidden");
-      resolveShortcutsInCurrentEmail();
-    });
-    document.getElementById("bannerDismissBtn").addEventListener("click", () => {
-      document.getElementById("shortcutBanner").classList.add("hidden");
-    });
 
     document.getElementById("attachmentReminderClose").addEventListener("click", () => {
       document.getElementById("attachmentReminderOverlay").classList.add("hidden");
