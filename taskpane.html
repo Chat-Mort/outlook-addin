@@ -34,22 +34,6 @@
     background: var(--paper);
     font-size: 14px;
   }
-  header {
-    padding: 14px 16px 10px;
-    border-bottom: 1px solid var(--line);
-    background: var(--card);
-  }
-  header h1 {
-    font-size: 15px;
-    margin: 0 0 2px;
-    letter-spacing: 0.2px;
-  }
-  header p {
-    margin: 0;
-    color: var(--ink-soft);
-    font-size: 12px;
-  }
-
   main { padding: 12px 16px 24px; }
 
   button {
@@ -86,6 +70,63 @@
     color: var(--ink-soft);
     margin: 0;
     font-weight: 600;
+  }
+
+  .category-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--ink-soft);
+    padding: 10px 2px 4px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 6px;
+    cursor: pointer;
+  }
+  .category-header:hover { color: var(--accent); }
+  .category-header:first-child { padding-top: 0; }
+  .category-header .chevron {
+    display: inline-block;
+    transition: transform 0.12s ease;
+    font-size: 9px;
+  }
+  .category-header.collapsed .chevron { transform: rotate(-90deg); }
+
+  .sync-status {
+    font-weight: 400;
+    font-size: 10.5px;
+    color: var(--ink-soft);
+    margin-left: 4px;
+  }
+  .sync-status.error { color: var(--danger); }
+
+  .shortcut-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    font-size: 12px;
+  }
+  .shortcut-banner span { flex: 1 1 auto; }
+
+  .search-input {
+    width: 100%;
+    font-family: inherit;
+    font-size: 12.5px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 8px;
+    color: var(--ink);
+    background: var(--card);
+    margin-bottom: 8px;
   }
 
   .sort-row {
@@ -224,6 +265,20 @@
     gap: 6px;
     margin-top: 12px;
   }
+
+  .subject-length-hint {
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin: 3px 0 0;
+  }
+  .subject-length-hint.warn { color: var(--accent); }
+
+  .attach-size-hint {
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin: 2px 0 4px;
+  }
+  .attach-size-hint.warn { color: var(--danger); }
 
   /* Attachments */
   .attach-row {
@@ -463,21 +518,30 @@
 </head>
 <body>
 
-<header>
-  <h1>Swift Compose</h1>
-  <p>Smart templates with dynamic dates and one-click send</p>
-</header>
-
 <main>
-  <div class="list-head">
-    <h2>Saved templates</h2>
-    <button class="primary" id="btnNew">+ New</button>
+  <div id="shortcutBanner" class="shortcut-banner hidden">
+    <span>This email has ##shortcuts to resolve.</span>
+    <button class="primary" id="bannerResolveBtn" style="padding:4px 8px; font-size:11.5px;">Resolve now</button>
+    <button class="ghost" id="bannerDismissBtn" style="padding:4px 6px; font-size:11.5px;">✕</button>
   </div>
+
+  <div class="list-head">
+    <h2>Saved templates <span id="syncStatus" class="sync-status"></span></h2>
+    <div style="display:flex; gap:6px;">
+      <button class="ghost" id="btnExport" title="Export all templates as a JSON backup file">⬇</button>
+      <button class="ghost" id="btnImport" title="Import templates from a JSON backup file">⬆</button>
+      <button class="primary" id="btnNew">+ New</button>
+    </div>
+  </div>
+  <input type="file" id="importFileInput" accept="application/json" class="hidden" />
+
+  <input type="text" id="searchInput" class="search-input hidden" placeholder="Search templates…" />
 
   <div class="sort-row">
     <label for="sortSelect">Sort by</label>
     <select id="sortSelect">
       <option value="alpha">Alphabetical</option>
+      <option value="recent">Recently used</option>
       <option value="created-desc">Created (newest)</option>
       <option value="created-asc">Created (oldest)</option>
       <option value="modified-desc">Modified (newest)</option>
@@ -499,6 +563,14 @@
     <label for="fName">Template name</label>
     <input id="fName" type="text" placeholder="E.g. Next-day booking" />
 
+    <label for="fCategory">Category — optional</label>
+    <input id="fCategory" type="text" list="categoryList" placeholder="E.g. Bookings, Tracking, Misc" />
+    <datalist id="categoryList"></datalist>
+
+    <label for="fNativeTemplate">Native Outlook template — optional</label>
+    <input id="fNativeTemplate" type="text" placeholder="E.g. Pickup request - Zaragoza" />
+    <p class="form-hint" style="margin-top:2px;">Just a reminder of which native "My Templates" entry this pairs with — purely informational.</p>
+
     <label for="fShortcut">Shortcut — optional</label>
     <input id="fShortcut" type="text" placeholder="e.g. signature (use elsewhere via ##signature)" />
 
@@ -516,6 +588,7 @@
       <input id="fSubject" type="text" placeholder="E.g. Transport booking - {{d}}" />
       <button type="button" class="btn-calendar" data-target="fSubject" title="Insert a tag">⚡</button>
     </div>
+    <p id="subjectLengthHint" class="subject-length-hint"></p>
 
     <label for="fBody">Body</label>
     <div class="field-with-calendar">
@@ -525,11 +598,14 @@
     <p class="form-hint">
       Format: DD/MM/YYYY, resolved automatically on every insert.
       Shortcuts: set one above to reuse this template elsewhere via <code>##shortcut</code>.
+      Basic formatting in the body: <code>**bold**</code>, <code>_italic_</code>, and lines
+      starting with <code>- </code> become a bullet list.
     </p>
 
     <label>Attachments — optional</label>
     <input type="file" id="fAttachments" multiple />
     <div id="attachList" class="attach-row" style="margin-top: 6px;"></div>
+    <p id="attachSizeHint" class="attach-size-hint"></p>
     <p class="attach-hint">
       Auto-attached only when inserting into an already-open draft. New emails created from the
       inbox need attachments added manually (Outlook API limitation, not something we can work around).
@@ -561,6 +637,10 @@
       <div class="tag-menu-item" id="tagItemDN">
         <span>Delivery note</span>
         <span class="tag-menu-help" title="Inserts {{dn}} — asks for a delivery note number every time this template is used, formatted as DNXXXXXXXX.">?</span>
+      </div>
+      <div class="tag-menu-item" id="tagItemShortcuts">
+        <span>Shortcuts</span>
+        <span class="tag-menu-help" title="Pastes an existing ##shortcut at the cursor, so you don't have to remember its exact spelling.">?</span>
       </div>
     </div>
 
@@ -606,6 +686,12 @@
       <div class="tag-menu-actions">
         <button class="primary" id="weekInsert" style="padding:5px 8px; font-size:12px;">Insert</button>
       </div>
+    </div>
+
+    <!-- "Shortcuts" detail view -->
+    <div id="tagMenuShortcuts" class="hidden">
+      <div class="tag-menu-back" id="shortcutsBack">‹ Back</div>
+      <div id="shortcutsListBox"></div>
     </div>
 
   </div>
@@ -662,6 +748,9 @@
   let formAttachments = [];
   let lastFocusedFieldId = "fBody";
   let currentSort = "alpha";
+  let currentSearch = "";
+  let lastDeleted = null;
+  let lastDeletedTimeoutId = null;
 
   function pad(n) { return String(n).padStart(2, "0"); }
 
@@ -706,6 +795,38 @@
     const d = new Date();
     d.setDate(d.getDate() + n * 7); // offset in WEEKS, not days
     return String(getISOWeekNumber(d));
+  }
+
+  // Escapes HTML-sensitive characters before we build our own markup around the text.
+  function escapeHtml(text) {
+    return text
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;");
+  }
+
+  // Lightweight Markdown-ish formatting for template bodies: **bold**, _italic_, and
+  // "- item" bullet lists. Anything else is treated as plain text with line breaks.
+  function markdownishToHtml(text) {
+    const inlineFormat = (s) => escapeHtml(s)
+      .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+      .replace(/_(.+?)_/g, "<i>$1</i>");
+
+    const lines = text.split("\n");
+    let html = "";
+    let inList = false;
+    lines.forEach((line) => {
+      const bulletMatch = line.match(/^-\s+(.*)/);
+      if (bulletMatch) {
+        if (!inList) { html += "<ul>"; inList = true; }
+        html += `<li>${inlineFormat(bulletMatch[1])}</li>`;
+      } else {
+        if (inList) { html += "</ul>"; inList = false; }
+        html += inlineFormat(line) + "<br>";
+      }
+    });
+    if (inList) html += "</ul>";
+    return html;
   }
 
   function applyPlaceholders(text) {
@@ -800,6 +921,8 @@
       const fallback = parseInt(t.id, 10) || Date.now();
       if (!t.createdAt) { t.createdAt = fallback; backfilled = true; }
       if (!t.updatedAt) { t.updatedAt = t.createdAt; backfilled = true; }
+      if (t.category === undefined) { t.category = ""; backfilled = true; }
+      if (t.nativeTemplate === undefined) { t.nativeTemplate = ""; backfilled = true; }
     });
     if (backfilled) saveTemplates();
   }
@@ -815,11 +938,15 @@
     });
     saveAttachmentStore(attachStore);
 
+    setSyncStatus("saving");
     try {
       Office.context.roamingSettings.set(STORAGE_KEY, JSON.stringify(coreTemplates));
       Office.context.roamingSettings.saveAsync((res) => {
-        if (res.status !== Office.AsyncResultStatus.Succeeded) {
+        if (res.status === Office.AsyncResultStatus.Succeeded) {
+          setSyncStatus("synced");
+        } else {
           const isSizeLimit = res.error && res.error.code === 9057;
+          setSyncStatus("error");
           setStatus(
             isSizeLimit
               ? "Couldn't save: storage limit (32 KB) reached. Delete a template or shorten some text."
@@ -829,7 +956,25 @@
         }
       });
     } catch (e) {
+      setSyncStatus("error");
       setStatus("Save error: " + e.message, true);
+    }
+  }
+
+  // Small "Synced" / "Saving…" / "Sync error" indicator next to the templates title.
+  let syncStatusFadeTimeout = null;
+  function setSyncStatus(state) {
+    const el = document.getElementById("syncStatus");
+    clearTimeout(syncStatusFadeTimeout);
+    el.classList.toggle("error", state === "error");
+    if (state === "saving") {
+      el.textContent = "· Saving…";
+    } else if (state === "synced") {
+      el.textContent = "· Synced";
+      syncStatusFadeTimeout = setTimeout(() => { el.textContent = ""; }, 4000);
+    } else if (state === "error") {
+      el.textContent = "· Sync error";
+      // Stays visible until the next successful save — this one shouldn't quietly disappear.
     }
   }
 
@@ -849,6 +994,86 @@
     }
   }
 
+  // Downloads a plain-text file (used for the JSON backup export).
+  function downloadTextFile(name, text) {
+    const blob = new Blob([text], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  // Exports every template (text fields + attachments) as one JSON file.
+  function exportTemplates() {
+    if (templates.length === 0) { setStatus("No templates to export.", true); return; }
+    const payload = {
+      exportedFrom: "Swift Compose",
+      exportedAt: new Date().toISOString(),
+      templates: templates
+    };
+    const stamp = todayStr().replaceAll("/", "-");
+    downloadTextFile(`swift-compose-backup-${stamp}.json`, JSON.stringify(payload, null, 2));
+    setStatus(`Exported ${templates.length} template(s).`);
+  }
+
+  // Imports templates from a previously exported JSON file. Always MERGES — never overwrites
+  // or deletes existing templates — and gives imported templates fresh ids (and clears their
+  // shortcut, to avoid silently colliding with an existing one) so nothing gets overwritten.
+  function importTemplatesFromFile(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      let payload;
+      try {
+        payload = JSON.parse(String(reader.result));
+      } catch (e) {
+        setStatus("This file isn't valid JSON.", true);
+        return;
+      }
+      const incoming = Array.isArray(payload) ? payload : payload.templates;
+      if (!Array.isArray(incoming)) {
+        setStatus("This file doesn't look like a Swift Compose backup.", true);
+        return;
+      }
+
+      const existingShortcuts = new Set(templates.map((t) => t.shortcut).filter(Boolean));
+      let imported = 0;
+      incoming.forEach((raw) => {
+        if (!raw || !raw.name) return;
+        const now = Date.now() + imported; // keeps ids unique even if several import in the same ms
+        let shortcut = raw.shortcut || "";
+        if (shortcut && existingShortcuts.has(shortcut)) shortcut = ""; // avoid silent collisions
+        if (shortcut) existingShortcuts.add(shortcut);
+        templates.push({
+          id: now.toString(),
+          name: raw.name,
+          category: raw.category || "",
+          nativeTemplate: raw.nativeTemplate || "",
+          shortcut: shortcut,
+          to: raw.to || "",
+          cc: raw.cc || "",
+          bcc: raw.bcc || "",
+          subject: raw.subject || "",
+          body: raw.body || "",
+          attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
+          createdAt: now,
+          updatedAt: now
+        });
+        imported++;
+      });
+
+      if (imported === 0) { setStatus("Nothing to import in this file.", true); return; }
+      saveTemplates();
+      renderList();
+      setStatus(`Imported ${imported} template(s).`);
+    };
+    reader.onerror = () => setStatus("Couldn't read this file.", true);
+    reader.readAsText(file);
+  }
+
   function loadSortPref() {
     return localStorage.getItem(SORT_KEY) || "alpha";
   }
@@ -857,8 +1082,13 @@
   }
 
   function sortedTemplates() {
-    const list = templates.slice();
+    let list = templates.slice();
+    if (currentSearch) {
+      const q = currentSearch.toLowerCase();
+      list = list.filter((t) => t.name.toLowerCase().includes(q));
+    }
     switch (currentSort) {
+      case "recent": return list.sort((a, b) => (b.lastUsedAt || 0) - (a.lastUsedAt || 0));
       case "created-desc": return list.sort((a, b) => b.createdAt - a.createdAt);
       case "created-asc": return list.sort((a, b) => a.createdAt - b.createdAt);
       case "modified-desc": return list.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -873,72 +1103,187 @@
     const el = document.getElementById("status");
     el.textContent = msg || "";
     el.className = isError ? "error" : "";
-    if (msg) setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 4000);
+    if (msg) setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, isError ? 8000 : 4000);
   }
+
+  // Same as setStatus, but with a clickable "Undo" action next to the message.
+  function setUndoableStatus(msg, onUndo) {
+    const el = document.getElementById("status");
+    el.className = "";
+    el.innerHTML = `${msg} <button type="button" id="undoActionBtn" style="border:none; background:none; color:var(--accent); text-decoration:underline; cursor:pointer; font-size:12px; padding:0;">Undo</button>`;
+    document.getElementById("undoActionBtn").addEventListener("click", () => {
+      onUndo();
+      el.textContent = "";
+    });
+    setTimeout(() => {
+      if (document.getElementById("undoActionBtn")) el.textContent = "";
+    }, 6000);
+  }
+
+  // Groups a sorted list of templates by category, keeping each group's items in the same
+  // order they arrived in. Named categories come first (alphabetically), uncategorized last.
+  function groupByCategory(list) {
+    const groups = new Map();
+    list.forEach((t) => {
+      const cat = t.category || "";
+      if (!groups.has(cat)) groups.set(cat, []);
+      groups.get(cat).push(t);
+    });
+    const orderedKeys = [...groups.keys()]
+      .filter((k) => k !== "")
+      .sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
+    if (groups.has("")) orderedKeys.push("");
+    return orderedKeys.map((k) => ({ category: k, items: groups.get(k) }));
+  }
+
+  const COLLAPSED_KEY = "modeles_pro_collapsed_categories_v1";
+  function loadCollapsedCategories() {
+    try {
+      const raw = localStorage.getItem(COLLAPSED_KEY);
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch (e) {
+      return new Set();
+    }
+  }
+  function saveCollapsedCategories(set) {
+    localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...set]));
+  }
+  let collapsedCategories = loadCollapsedCategories();
 
   function renderList() {
     const list = document.getElementById("templateList");
     const empty = document.getElementById("emptyState");
     list.innerHTML = "";
 
+    // Only worth showing once the list is long enough to actually need filtering.
+    const searchBox = document.getElementById("searchInput");
+    searchBox.classList.toggle("hidden", templates.length <= 10);
+
     if (templates.length === 0) {
+      empty.textContent = 'No templates yet. Click "+ New" to create your first one.';
+      empty.classList.remove("hidden");
+      return;
+    }
+
+    const visible = sortedTemplates();
+    if (visible.length === 0) {
+      empty.textContent = "No templates match your search.";
       empty.classList.remove("hidden");
       return;
     }
     empty.classList.add("hidden");
 
-    sortedTemplates().forEach((t) => {
-      const card = document.createElement("div");
-      card.className = "template";
-      card.title = isComposeMode() ? "Click to insert into this email" : "Click to create a new email";
-      card.innerHTML = `
-        <div class="template-top">
-          <p class="template-name"></p>
-          <button class="template-icon-btn btn-edit" title="Edit">✎</button>
-          <button class="template-icon-btn danger btn-delete" title="Delete">🗑</button>
-        </div>
-        <p class="template-preview"></p>
-      `;
-      card.querySelector(".template-name").textContent = t.name;
-      card.querySelector(".template-preview").textContent = t.subject || (t.body || "").slice(0, 80);
+    const groups = groupByCategory(visible);
+    // No point labeling groups if everything falls into a single (uncategorized) bucket.
+    const showHeaders = groups.length > 1;
 
-      if (t.attachments && t.attachments.length > 0) {
-        const meta = document.createElement("div");
-        meta.className = "template-meta";
-        const badge = document.createElement("span");
-        badge.className = "template-badge";
-        badge.textContent = `📎 ${t.attachments.length}`;
-        meta.appendChild(badge);
-        card.appendChild(meta);
+    groups.forEach((group) => {
+      const isCollapsed = showHeaders && collapsedCategories.has(group.category);
+
+      if (showHeaders) {
+        const header = document.createElement("div");
+        header.className = "category-header" + (isCollapsed ? " collapsed" : "");
+        header.innerHTML = `<span><span class="chevron">▾</span> ${group.category || "Uncategorized"} (${group.items.length})</span>`;
+        header.addEventListener("click", () => {
+          if (collapsedCategories.has(group.category)) collapsedCategories.delete(group.category);
+          else collapsedCategories.add(group.category);
+          saveCollapsedCategories(collapsedCategories);
+          renderList();
+        });
+        list.appendChild(header);
       }
 
-      // The whole card is clickable to insert the template...
-      card.addEventListener("click", () => insertTemplate(t));
+      if (isCollapsed) return; // skip rendering this group's cards
 
-      // ...except the edit/delete icons, which shouldn't trigger insertion.
-      const editBtn = card.querySelector(".btn-edit");
-      const deleteBtn = card.querySelector(".btn-delete");
-      editBtn.addEventListener("click", (e) => { e.stopPropagation(); openForm(t); });
-      deleteBtn.addEventListener("click", (e) => { e.stopPropagation(); deleteTemplate(t.id); });
+      group.items.forEach((t) => {
+        const card = document.createElement("div");
+        card.className = "template";
+        card.title = isComposeMode() ? "Click to insert into this email" : "Click to create a new email";
+        card.innerHTML = `
+          <div class="template-top">
+            <p class="template-name"></p>
+            <button class="template-icon-btn btn-clone" title="Duplicate">⧉</button>
+            <button class="template-icon-btn btn-edit" title="Edit">✎</button>
+            <button class="template-icon-btn danger btn-delete" title="Delete">🗑</button>
+          </div>
+          <p class="template-preview"></p>
+        `;
+        card.querySelector(".template-name").textContent = t.name;
+        card.querySelector(".template-preview").textContent = t.subject || (t.body || "").slice(0, 80);
 
-      list.appendChild(card);
+        if ((t.attachments && t.attachments.length > 0) || t.nativeTemplate) {
+          const meta = document.createElement("div");
+          meta.className = "template-meta";
+          if (t.attachments && t.attachments.length > 0) {
+            const badge = document.createElement("span");
+            badge.className = "template-badge";
+            badge.textContent = `📎 ${t.attachments.length}`;
+            meta.appendChild(badge);
+          }
+          if (t.nativeTemplate) {
+            const badge = document.createElement("span");
+            badge.className = "template-badge";
+            badge.textContent = `🔗 ${t.nativeTemplate}`;
+            meta.appendChild(badge);
+          }
+          card.appendChild(meta);
+        }
+
+        // The whole card is clickable to insert the template...
+        card.addEventListener("click", () => insertTemplate(t));
+
+        // ...except the clone/edit/delete icons, which shouldn't trigger insertion.
+        const cloneBtn = card.querySelector(".btn-clone");
+        const editBtn = card.querySelector(".btn-edit");
+        const deleteBtn = card.querySelector(".btn-delete");
+        cloneBtn.addEventListener("click", (e) => { e.stopPropagation(); cloneTemplate(t); });
+        editBtn.addEventListener("click", (e) => { e.stopPropagation(); openForm(t); });
+        deleteBtn.addEventListener("click", (e) => { e.stopPropagation(); deleteTemplate(t.id); });
+
+        list.appendChild(card);
+      });
     });
   }
 
   function openForm(t) {
     editingId = t ? t.id : null;
     document.getElementById("fName").value = t ? t.name : "";
+    document.getElementById("fCategory").value = t ? (t.category || "") : "";
+    document.getElementById("fNativeTemplate").value = t ? (t.nativeTemplate || "") : "";
     document.getElementById("fShortcut").value = t ? (t.shortcut || "") : "";
     document.getElementById("fTo").value = t ? (t.to || "") : "";
     document.getElementById("fCc").value = t ? (t.cc || "") : "";
     document.getElementById("fBcc").value = t ? (t.bcc || "") : "";
     document.getElementById("fSubject").value = t ? t.subject : "";
+    updateSubjectLengthHint();
     document.getElementById("fBody").value = t ? t.body : "";
     formAttachments = t && t.attachments ? t.attachments.slice() : [];
     document.getElementById("fAttachments").value = "";
     renderAttachList();
+    refreshCategoryDatalist();
     document.getElementById("form").classList.remove("hidden");
     document.getElementById("fName").focus();
+  }
+
+  // Fills the category autocomplete list with every distinct category already in use.
+  function refreshCategoryDatalist() {
+    const datalist = document.getElementById("categoryList");
+    const categories = [...new Set(templates.map((t) => t.category).filter(Boolean))].sort();
+    datalist.innerHTML = categories.map((c) => `<option value="${c.replace(/"/g, "&quot;")}"></option>`).join("");
+  }
+
+  // Informational only — never blocks saving. Most inboxes truncate subjects somewhere
+  // around 78-100 characters, so this is just a heads-up, not a hard limit.
+  function updateSubjectLengthHint() {
+    const val = document.getElementById("fSubject").value;
+    const hint = document.getElementById("subjectLengthHint");
+    const len = val.length;
+    const threshold = 78;
+    if (len === 0) { hint.textContent = ""; hint.classList.remove("warn"); return; }
+    hint.textContent = len > threshold
+      ? `${len} characters — some inboxes truncate subjects around 78-100 characters.`
+      : `${len} characters`;
+    hint.classList.toggle("warn", len > threshold);
   }
 
   function closeForm() {
@@ -971,6 +1316,23 @@
       });
       box.appendChild(chip);
     });
+    updateAttachSizeHint();
+  }
+
+  // Informational only. Base64 storage adds ~33% overhead over the real file size, and
+  // everything lives in the browser's localStorage (a few MB total budget) — this is just
+  // a heads-up so a heavy attachment doesn't silently break saving later.
+  function updateAttachSizeHint() {
+    const hint = document.getElementById("attachSizeHint");
+    const totalBytes = formAttachments.reduce((sum, a) => sum + (a.base64 ? a.base64.length * 0.75 : 0), 0);
+    if (totalBytes === 0) { hint.textContent = ""; hint.classList.remove("warn"); return; }
+    const mb = totalBytes / (1024 * 1024);
+    const warnThresholdMb = 2;
+    hint.textContent = mb >= 1
+      ? `Attachments: ${mb.toFixed(1)} MB stored locally`
+      : `Attachments: ${Math.round(totalBytes / 1024)} KB stored locally`;
+    if (mb >= warnThresholdMb) hint.textContent += " — getting heavy, keep an eye on it.";
+    hint.classList.toggle("warn", mb >= warnThresholdMb);
   }
 
   function handleAttachmentPick(fileList) {
@@ -994,6 +1356,8 @@
 
   function saveForm() {
     const name = document.getElementById("fName").value.trim();
+    const category = document.getElementById("fCategory").value.trim();
+    const nativeTemplate = document.getElementById("fNativeTemplate").value.trim();
     const shortcut = normalizeShortcut(document.getElementById("fShortcut").value);
     const to = document.getElementById("fTo").value.trim();
     const cc = document.getElementById("fCc").value.trim();
@@ -1006,9 +1370,9 @@
     const now = Date.now();
     if (editingId) {
       const t = templates.find((x) => x.id === editingId);
-      if (t) { t.name = name; t.shortcut = shortcut; t.to = to; t.cc = cc; t.bcc = bcc; t.subject = subject; t.body = body; t.attachments = formAttachments.slice(); t.updatedAt = now; }
+      if (t) { t.name = name; t.category = category; t.nativeTemplate = nativeTemplate; t.shortcut = shortcut; t.to = to; t.cc = cc; t.bcc = bcc; t.subject = subject; t.body = body; t.attachments = formAttachments.slice(); t.updatedAt = now; }
     } else {
-      templates.push({ id: now.toString(), name, shortcut, to, cc, bcc, subject, body, attachments: formAttachments.slice(), createdAt: now, updatedAt: now });
+      templates.push({ id: now.toString(), name, category, nativeTemplate, shortcut, to, cc, bcc, subject, body, attachments: formAttachments.slice(), createdAt: now, updatedAt: now });
     }
     saveTemplates();
     renderList();
@@ -1024,10 +1388,41 @@
   }
 
   function deleteTemplate(id) {
+    const removed = templates.find((t) => t.id === id);
     templates = templates.filter((t) => t.id !== id);
     saveTemplates();
     renderList();
-    setStatus("Template deleted.");
+
+    lastDeleted = removed;
+    clearTimeout(lastDeletedTimeoutId);
+    lastDeletedTimeoutId = setTimeout(() => { lastDeleted = null; }, 6000);
+
+    setUndoableStatus(`Template "${removed ? removed.name : ""}" deleted.`, () => {
+      if (!lastDeleted) return;
+      templates.push(lastDeleted);
+      lastDeleted = null;
+      saveTemplates();
+      renderList();
+    });
+  }
+
+  // Duplicates a template (name, subject, body, shortcut, attachments) and opens the
+  // copy directly in the edit form, ready to be adjusted.
+  function cloneTemplate(t) {
+    const now = Date.now();
+    const copy = Object.assign({}, t, {
+      id: now.toString(),
+      name: t.name + " (copy)",
+      shortcut: "", // shortcuts must stay unique — cleared so it doesn't collide with the original
+      attachments: (t.attachments || []).map((a) => Object.assign({}, a)),
+      createdAt: now,
+      updatedAt: now
+    });
+    templates.push(copy);
+    saveTemplates();
+    renderList();
+    openForm(copy);
+    setStatus(`Duplicated "${t.name}". Give the copy a name and save.`);
   }
 
   // Turns "a@x.com, b@y.com ; c@z.com" into a clean array of addresses
@@ -1144,11 +1539,15 @@
     }
 
     const subject = applyPlaceholders(subjectRaw);
-    const bodyHtml = applyPlaceholders(bodyRaw).replaceAll("\n", "<br>");
+    const bodyHtml = markdownishToHtml(applyPlaceholders(bodyRaw));
     const toList = parseRecipients(t.to);
     const ccList = parseRecipients(t.cc);
     const bccList = parseRecipients(t.bcc);
     const attachments = t.attachments || [];
+
+    // Marks this template as just used, for the "Recently used" sort option.
+    t.lastUsedAt = Date.now();
+    saveTemplates();
 
     if (isComposeMode()) {
       // An email is already open for editing: fill that one in (attachments included).
@@ -1369,6 +1768,28 @@
     return result;
   }
 
+  // Runs once when the panel opens in compose mode: if the draft (created from a native
+  // Outlook template, typically) already contains ##shortcuts, surface a banner instead of
+  // relying on remembering to click "Resolve ## shortcuts" manually every time.
+  async function detectUnresolvedShortcuts() {
+    const item = Office.context.mailbox.item;
+    try {
+      const [subject, bodyHtml] = await Promise.all([
+        new Promise((resolve, reject) => item.subject.getAsync((res) => {
+          res.status === Office.AsyncResultStatus.Succeeded ? resolve(res.value || "") : reject(res.error);
+        })),
+        new Promise((resolve, reject) => item.body.getAsync(Office.CoercionType.Html, (res) => {
+          res.status === Office.AsyncResultStatus.Succeeded ? resolve(res.value || "") : reject(res.error);
+        }))
+      ]);
+      if (/##\w+/.test(subject) || /##\w+/.test(bodyHtml)) {
+        document.getElementById("shortcutBanner").classList.remove("hidden");
+      }
+    } catch (e) {
+      // Non-critical: worst case, the person just uses the "Resolve" button manually.
+    }
+  }
+
   async function resolveShortcutsInCurrentEmail() {
     const item = Office.context.mailbox.item;
 
@@ -1451,7 +1872,15 @@
       const parts = [];
       parts.push(subjectChanged || bodyChanged ? "Shortcuts resolved" : "No ##shortcut found in this email");
       if (finalAttachments.length > 0) parts.push(`${finalAttachments.length} attachment(s) added`);
-      setStatus(parts.join(", ") + ".");
+
+      // Anything still shaped like "##word" after resolution didn't match a known shortcut —
+      // most likely a typo, and easy to miss otherwise since it's just left as plain text.
+      const leftover = [...new Set([...(updatedSubject + " " + updatedBody).matchAll(/##(\w+)/g)].map((m) => m[1]))];
+      if (leftover.length > 0) {
+        setStatus(parts.join(", ") + `. ⚠ Unmatched: ${leftover.map((k) => "##" + k).join(", ")} — check spelling.`, true);
+      } else {
+        setStatus(parts.join(", ") + ".");
+      }
     } catch (err) {
       setStatus("Error: " + (err ? err.message : "unknown"), true);
     }
@@ -1474,9 +1903,26 @@
       renderList();
     });
 
+    document.getElementById("searchInput").addEventListener("input", (e) => {
+      currentSearch = e.target.value.trim();
+      renderList();
+    });
+
+    document.getElementById("btnExport").addEventListener("click", exportTemplates);
+    document.getElementById("btnImport").addEventListener("click", () => {
+      document.getElementById("importFileInput").click();
+    });
+    document.getElementById("importFileInput").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) importTemplatesFromFile(file);
+      e.target.value = ""; // allows importing the same file again later if needed
+    });
+
     document.getElementById("fAttachments").addEventListener("change", (e) => {
       handleAttachmentPick(e.target.files);
     });
+
+    document.getElementById("fSubject").addEventListener("input", updateSubjectLengthHint);
 
     // Remembers which field (subject or body) had focus, to know where to insert the chosen date
     ["fSubject", "fBody"].forEach((id) => {
@@ -1488,12 +1934,14 @@
     const tagMenuList = document.getElementById("tagMenuList");
     const tagMenuDay = document.getElementById("tagMenuDay");
     const tagMenuWeek = document.getElementById("tagMenuWeek");
+    const tagMenuShortcuts = document.getElementById("tagMenuShortcuts");
     let tagMenuTargetId = "fBody";
 
     function closeTagMenu() {
       tagMenu.classList.add("hidden");
       tagMenuDay.classList.add("hidden");
       tagMenuWeek.classList.add("hidden");
+      tagMenuShortcuts.classList.add("hidden");
       tagMenuList.classList.remove("hidden");
     }
 
@@ -1503,6 +1951,7 @@
         tagMenuTargetId = btn.dataset.target;
         tagMenuDay.classList.add("hidden");
         tagMenuWeek.classList.add("hidden");
+        tagMenuShortcuts.classList.add("hidden");
         tagMenuList.classList.remove("hidden");
         tagMenu.classList.remove("hidden");
         // Positions the menu right under the clicked button
@@ -1605,12 +2054,47 @@
       closeTagMenu();
     });
 
+    // "Shortcuts" item: opens a sub-view listing every ##shortcut already defined
+    document.getElementById("tagItemShortcuts").addEventListener("click", () => {
+      const box = document.getElementById("shortcutsListBox");
+      const withShortcuts = templates.filter((t) => t.shortcut);
+      if (withShortcuts.length === 0) {
+        box.innerHTML = `<div style="font-size:11.5px; color: var(--ink-soft); padding: 6px 4px;">No shortcuts defined yet — set one in a template's edit form.</div>`;
+      } else {
+        box.innerHTML = withShortcuts.map((t) =>
+          `<div class="tag-menu-item" data-shortcut="${t.shortcut}"><span>##${t.shortcut}</span><span class="tag-menu-help" title="From template: ${t.name.replace(/"/g, "&quot;")}">?</span></div>`
+        ).join("");
+        box.querySelectorAll("[data-shortcut]").forEach((row) => {
+          row.addEventListener("click", () => {
+            insertAtCursor(document.getElementById(tagMenuTargetId), "##" + row.dataset.shortcut);
+            closeTagMenu();
+          });
+        });
+      }
+      tagMenuList.classList.add("hidden");
+      tagMenuShortcuts.classList.remove("hidden");
+    });
+    document.getElementById("shortcutsBack").addEventListener("click", () => {
+      tagMenuShortcuts.classList.add("hidden");
+      tagMenuList.classList.remove("hidden");
+    });
+
     // The "Resolve ## shortcuts" button only makes sense in an already-open draft
     if (isComposeMode()) {
       const btnResolve = document.getElementById("btnResolveShortcuts");
       btnResolve.classList.remove("hidden");
       btnResolve.addEventListener("click", resolveShortcutsInCurrentEmail);
+
+      detectUnresolvedShortcuts();
     }
+
+    document.getElementById("bannerResolveBtn").addEventListener("click", () => {
+      document.getElementById("shortcutBanner").classList.add("hidden");
+      resolveShortcutsInCurrentEmail();
+    });
+    document.getElementById("bannerDismissBtn").addEventListener("click", () => {
+      document.getElementById("shortcutBanner").classList.add("hidden");
+    });
 
     document.getElementById("attachmentReminderClose").addEventListener("click", () => {
       document.getElementById("attachmentReminderOverlay").classList.add("hidden");
