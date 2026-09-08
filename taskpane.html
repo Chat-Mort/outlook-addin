@@ -500,11 +500,69 @@
   }
 
   .hidden { display: none !important; }
+  .tab-bar {
+    display: flex;
+    border-bottom: 1px solid var(--line);
+    background: var(--card);
+  }
+  .tab-btn {
+    flex: 1 1 auto;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    padding: 9px 6px;
+    font-size: 12px;
+    color: var(--ink-soft);
+    border-bottom: 2px solid transparent;
+  }
+  .tab-btn:hover { color: var(--accent); border-color: transparent; }
+  .tab-btn.active {
+    color: var(--accent);
+    font-weight: 600;
+    border-bottom: 2px solid var(--accent);
+  }
+
+  .help-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .help-table td {
+    padding: 5px 6px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  .help-table td:first-child { white-space: nowrap; width: 1%; }
+  .help-table code {
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 1px 4px;
+    border-radius: 4px;
+  }
+  .help-text {
+    font-size: 12px;
+    color: var(--ink-soft);
+    line-height: 1.5;
+    margin: 0 0 4px;
+  }
+  .help-text code {
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 1px 4px;
+    border-radius: 4px;
+  }
 </style>
 </head>
 <body>
 
+<div class="tab-bar">
+  <button class="tab-btn active" data-view="viewTemplates">Templates</button>
+  <button class="tab-btn" data-view="viewDirectory">Directory</button>
+  <button class="tab-btn" data-view="viewHelp">Help</button>
+</div>
+
 <main>
+<div id="viewTemplates">
   <div class="list-head">
     <h2>Saved templates <span id="syncStatus" class="sync-status"></span></h2>
     <div style="display:flex; gap:6px;">
@@ -553,6 +611,7 @@
 
     <label for="fShortcut">Shortcut — optional</label>
     <input id="fShortcut" type="text" placeholder="e.g. signature (use elsewhere via ##signature)" />
+    <p id="shortcutHint" class="subject-length-hint"></p>
 
     <label for="fTo">Recipients (To)</label>
     <input id="fTo" type="text" placeholder="e.g. contact@client.com, other@client.com" />
@@ -675,6 +734,98 @@
     </div>
 
   </div>
+</div>
+
+<div id="viewDirectory" class="hidden">
+  <div class="list-head">
+    <h2>Directory <span id="directorySyncStatus" class="sync-status"></span></h2>
+    <div style="display:flex; gap:6px;">
+      <button class="ghost" id="btnDirExport" title="Export the directory as a JSON backup file">⬇</button>
+      <button class="ghost" id="btnDirImport" title="Import directory entries from a JSON file">⬆</button>
+      <button class="primary" id="btnDirNew">+ New</button>
+    </div>
+  </div>
+  <input type="file" id="dirImportFileInput" accept="application/json" class="hidden" />
+
+  <input type="text" id="dirSearchInput" class="search-input" placeholder="Search by name or service…" />
+
+  <div id="directoryList"></div>
+  <div id="directoryEmptyState" class="empty hidden">No contacts yet. Click "+ New" to add one.</div>
+
+  <div id="dirForm" class="form hidden">
+    <label for="dName">Name</label>
+    <input id="dName" type="text" placeholder="E.g. Marie Dupont" />
+
+    <label for="dRole">Role / title — optional</label>
+    <input id="dRole" type="text" placeholder="E.g. Quality supervisor" />
+
+    <label for="dService">Service / department — optional</label>
+    <input id="dService" type="text" placeholder="E.g. ADV, Quality, Maintenance" />
+
+    <label for="dPhone">Phone — optional</label>
+    <input id="dPhone" type="text" placeholder="E.g. ext. 4521" />
+
+    <label for="dEmail">Email — optional</label>
+    <input id="dEmail" type="text" placeholder="E.g. m.dupont@company.com" />
+
+    <div class="form-actions">
+      <button class="ghost" id="dirBtnCancel">Cancel</button>
+      <button class="primary" id="dirBtnSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="viewHelp" class="hidden">
+  <h2 style="font-size:13px; margin: 4px 0 10px;">Tags</h2>
+  <table class="help-table">
+    <tr><td><code>{{d}}</code></td><td>Today</td></tr>
+    <tr><td><code>{{d+N}}</code> / <code>{{d-N}}</code></td><td>N calendar days ahead/back</td></tr>
+    <tr><td><code>{{bd+N}}</code> / <code>{{bd-N}}</code></td><td>N business days ahead/back (weekends skipped)</td></tr>
+    <tr><td><code>{{w}}</code></td><td>Current ISO week number</td></tr>
+    <tr><td><code>{{w+N}}</code> / <code>{{w-N}}</code></td><td>N weeks ahead/back</td></tr>
+    <tr><td><code>{{c}}</code></td><td>Asks for a specific date at insertion time (calendar picker)</td></tr>
+    <tr><td><code>{{dn}}</code></td><td>Asks for a delivery note number, inserted as DNXXXXXXXX</td></tr>
+  </table>
+
+  <h2 style="font-size:13px; margin: 16px 0 10px;">Body formatting</h2>
+  <table class="help-table">
+    <tr><td><code>**text**</code></td><td>Bold</td></tr>
+    <tr><td><code>_text_</code></td><td>Italic</td></tr>
+    <tr><td><code>- item</code></td><td>Bullet list (one per line)</td></tr>
+  </table>
+
+  <h2 style="font-size:13px; margin: 16px 0 10px;">Shortcuts</h2>
+  <p class="help-text">
+    Give a template a shortcut name in its edit form, then type <code>##name</code> anywhere
+    (in another template, or directly in an open draft) to pull in that template's content.
+    Used in a subject, it pulls the referenced template's subject; used in a body, its body.
+    Nested shortcuts work (up to 5 levels deep). The ⚡ menu's "Shortcuts" entry lists every
+    shortcut you've defined, so you don't have to remember exact spelling.
+  </p>
+
+  <h2 style="font-size:13px; margin: 16px 0 10px;">Using a template</h2>
+  <p class="help-text">
+    Click anywhere on a template card: it inserts into an already-open draft, or creates a
+    brand new email if you're browsing the inbox. The ✎ and 🗑 icons edit or delete without
+    triggering insertion; ⧉ duplicates a template.
+  </p>
+
+  <h2 style="font-size:13px; margin: 16px 0 10px;">Attachments</h2>
+  <p class="help-text">
+    Mark a stored attachment "Final document" to have it attached automatically wherever
+    possible. Otherwise it's treated as a blank placeholder: you'll get a reminder with a
+    "Download blank" button and an "Import final" button to attach your real file instead.
+    New emails created from the inbox (separate window) can only offer the download — nothing
+    can be auto-attached there, that's an Outlook API limitation.
+  </p>
+
+  <h2 style="font-size:13px; margin: 16px 0 10px;">Storage</h2>
+  <p class="help-text">
+    Template text is synced to your mailbox (works across devices signed into the same
+    account). Attachments and the directory stay local to this browser/device only. Use
+    Export/Import (⬇/⬆) for a manual backup of either.
+  </p>
+</div>
 </main>
 
 <div id="status"></div>
@@ -723,6 +874,7 @@
   const STORAGE_KEY = "modeles_pro_templates_v1";
   const ATTACH_STORAGE_KEY = "modeles_pro_attachments_v1";
   const SORT_KEY = "modeles_pro_sort_v1";
+  const DIRECTORY_KEY = "modeles_pro_directory_v1";
   let templates = [];
   let editingId = null;
   let formAttachments = [];
@@ -731,6 +883,9 @@
   let currentSearch = "";
   let lastDeleted = null;
   let lastDeletedTimeoutId = null;
+  let directory = [];
+  let dirEditingId = null;
+  let dirSearch = "";
 
   function pad(n) { return String(n).padStart(2, "0"); }
 
@@ -1231,6 +1386,7 @@
     document.getElementById("fCategory").value = t ? (t.category || "") : "";
     document.getElementById("fNativeTemplate").value = t ? (t.nativeTemplate || "") : "";
     document.getElementById("fShortcut").value = t ? (t.shortcut || "") : "";
+    updateShortcutHint();
     document.getElementById("fTo").value = t ? (t.to || "") : "";
     document.getElementById("fCc").value = t ? (t.cc || "") : "";
     document.getElementById("fBcc").value = t ? (t.bcc || "") : "";
@@ -1264,6 +1420,23 @@
       ? `${len} characters — some inboxes truncate subjects around 78-100 characters.`
       : `${len} characters`;
     hint.classList.toggle("warn", len > threshold);
+  }
+
+  // Non-blocking: warns if the shortcut being typed is already used by another template,
+  // since only the first match wins silently otherwise.
+  function updateShortcutHint() {
+    const raw = document.getElementById("fShortcut").value;
+    const hint = document.getElementById("shortcutHint");
+    const normalized = normalizeShortcut(raw);
+    if (!normalized) { hint.textContent = ""; hint.classList.remove("warn"); return; }
+    const clash = templates.find((t) => t.shortcut === normalized && t.id !== editingId);
+    if (clash) {
+      hint.textContent = `Already used by "${clash.name}" — only one will actually be matched.`;
+      hint.classList.add("warn");
+    } else {
+      hint.textContent = "";
+      hint.classList.remove("warn");
+    }
   }
 
   function closeForm() {
@@ -1857,14 +2030,185 @@
       // Anything still shaped like "##word" after resolution didn't match a known shortcut —
       // most likely a typo, and easy to miss otherwise since it's just left as plain text.
       const leftover = [...new Set([...(updatedSubject + " " + updatedBody).matchAll(/##(\w+)/g)].map((m) => m[1]))];
+      let message = parts.join(", ") + ".";
       if (leftover.length > 0) {
-        setStatus(parts.join(", ") + `. ⚠ Unmatched: ${leftover.map((k) => "##" + k).join(", ")} — check spelling.`, true);
+        message += ` ⚠ Unmatched: ${leftover.map((k) => "##" + k).join(", ")} — check spelling.`;
+      }
+
+      if (subjectChanged || bodyChanged) {
+        // Undo restores the subject/body text only — any attachments just added stay
+        // attached (Office.js has no clean way to detach them programmatically here).
+        setUndoableStatus(message, async () => {
+          if (subjectChanged) await setSubject(originalSubject);
+          if (bodyChanged) await setBody(originalBody);
+          setStatus("Reverted.");
+        });
       } else {
-        setStatus(parts.join(", ") + ".");
+        setStatus(message, leftover.length > 0);
       }
     } catch (err) {
       setStatus("Error: " + (err ? err.message : "unknown"), true);
     }
+  }
+
+  // ===== Directory (contacts) =====
+
+  function loadDirectory() {
+    try {
+      const raw = Office.context.roamingSettings.get(DIRECTORY_KEY);
+      directory = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      directory = [];
+    }
+  }
+
+  function saveDirectory() {
+    try {
+      Office.context.roamingSettings.set(DIRECTORY_KEY, JSON.stringify(directory));
+      const el = document.getElementById("directorySyncStatus");
+      el.textContent = "· Saving…";
+      el.classList.remove("error");
+      Office.context.roamingSettings.saveAsync((res) => {
+        if (res.status === Office.AsyncResultStatus.Succeeded) {
+          el.textContent = "· Synced";
+          setTimeout(() => { el.textContent = ""; }, 4000);
+        } else {
+          el.textContent = "· Sync error";
+          el.classList.add("error");
+        }
+      });
+    } catch (e) {
+      setStatus("Directory save error: " + e.message, true);
+    }
+  }
+
+  function renderDirectory() {
+    const list = document.getElementById("directoryList");
+    const empty = document.getElementById("directoryEmptyState");
+    list.innerHTML = "";
+
+    let visible = directory.slice().sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
+    if (dirSearch) {
+      const q = dirSearch.toLowerCase();
+      visible = visible.filter((c) =>
+        c.name.toLowerCase().includes(q) || (c.service || "").toLowerCase().includes(q)
+      );
+    }
+
+    if (visible.length === 0) {
+      empty.textContent = directory.length === 0
+        ? 'No contacts yet. Click "+ New" to add one.'
+        : "No contacts match your search.";
+      empty.classList.remove("hidden");
+      return;
+    }
+    empty.classList.add("hidden");
+
+    visible.forEach((c) => {
+      const card = document.createElement("div");
+      card.className = "template";
+      card.style.cursor = "default";
+      card.innerHTML = `
+        <div class="template-top">
+          <p class="template-name"></p>
+          <button class="template-icon-btn btn-edit" title="Edit">✎</button>
+          <button class="template-icon-btn danger btn-delete" title="Delete">🗑</button>
+        </div>
+        <p class="template-preview"></p>
+      `;
+      card.querySelector(".template-name").textContent = c.name;
+      const details = [c.role, c.service, c.phone, c.email].filter(Boolean).join(" · ");
+      card.querySelector(".template-preview").textContent = details;
+
+      card.querySelector(".btn-edit").addEventListener("click", () => openDirForm(c));
+      card.querySelector(".btn-delete").addEventListener("click", () => deleteDirectoryEntry(c.id));
+
+      list.appendChild(card);
+    });
+  }
+
+  function openDirForm(c) {
+    dirEditingId = c ? c.id : null;
+    document.getElementById("dName").value = c ? c.name : "";
+    document.getElementById("dRole").value = c ? (c.role || "") : "";
+    document.getElementById("dService").value = c ? (c.service || "") : "";
+    document.getElementById("dPhone").value = c ? (c.phone || "") : "";
+    document.getElementById("dEmail").value = c ? (c.email || "") : "";
+    document.getElementById("dirForm").classList.remove("hidden");
+    document.getElementById("dName").focus();
+  }
+
+  function closeDirForm() {
+    document.getElementById("dirForm").classList.add("hidden");
+    dirEditingId = null;
+  }
+
+  function saveDirForm() {
+    const name = document.getElementById("dName").value.trim();
+    if (!name) { setStatus("Give this contact a name.", true); return; }
+    const entry = {
+      id: dirEditingId || Date.now().toString(),
+      name,
+      role: document.getElementById("dRole").value.trim(),
+      service: document.getElementById("dService").value.trim(),
+      phone: document.getElementById("dPhone").value.trim(),
+      email: document.getElementById("dEmail").value.trim()
+    };
+    if (dirEditingId) {
+      const idx = directory.findIndex((c) => c.id === dirEditingId);
+      if (idx !== -1) directory[idx] = entry;
+    } else {
+      directory.push(entry);
+    }
+    saveDirectory();
+    renderDirectory();
+    closeDirForm();
+    setStatus("Contact saved.");
+  }
+
+  function deleteDirectoryEntry(id) {
+    directory = directory.filter((c) => c.id !== id);
+    saveDirectory();
+    renderDirectory();
+    setStatus("Contact deleted.");
+  }
+
+  function exportDirectory() {
+    const payload = { exportedAt: new Date().toISOString(), directory };
+    const date = new Date().toISOString().slice(0, 10);
+    downloadTextFile(`swift-compose-directory-${date}.json`, JSON.stringify(payload, null, 2));
+    setStatus(`Exported ${directory.length} contact(s).`);
+  }
+
+  function importDirectoryFromFile(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result));
+        const incoming = Array.isArray(parsed) ? parsed : parsed.directory;
+        if (!Array.isArray(incoming)) throw new Error("Unrecognized file format.");
+        let added = 0;
+        incoming.forEach((raw) => {
+          if (!raw || !raw.name) return;
+          directory.push({
+            id: (Date.now() + added).toString(),
+            name: raw.name,
+            role: raw.role || "",
+            service: raw.service || "",
+            phone: raw.phone || "",
+            email: raw.email || ""
+          });
+          added++;
+        });
+        saveDirectory();
+        renderDirectory();
+        setStatus(`Imported ${added} contact(s).`);
+      } catch (e) {
+        setStatus("Import failed: " + e.message, true);
+      }
+    };
+    reader.onerror = () => setStatus("Couldn't read the file.", true);
+    reader.readAsText(file);
   }
 
   Office.onReady(() => {
@@ -1873,6 +2217,38 @@
     document.getElementById("sortSelect").value = currentSort;
     renderList();
     applyOfficeTheme();
+
+    loadDirectory();
+    renderDirectory();
+
+    // Tab switching
+    document.querySelectorAll(".tab-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        ["viewTemplates", "viewDirectory", "viewHelp"].forEach((id) => {
+          document.getElementById(id).classList.toggle("hidden", id !== btn.dataset.view);
+        });
+      });
+    });
+
+    // Directory
+    document.getElementById("btnDirNew").addEventListener("click", () => openDirForm(null));
+    document.getElementById("dirBtnCancel").addEventListener("click", closeDirForm);
+    document.getElementById("dirBtnSave").addEventListener("click", saveDirForm);
+    document.getElementById("btnDirExport").addEventListener("click", exportDirectory);
+    document.getElementById("btnDirImport").addEventListener("click", () => {
+      document.getElementById("dirImportFileInput").click();
+    });
+    document.getElementById("dirImportFileInput").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) importDirectoryFromFile(file);
+      e.target.value = "";
+    });
+    document.getElementById("dirSearchInput").addEventListener("input", (e) => {
+      dirSearch = e.target.value.trim();
+      renderDirectory();
+    });
 
     document.getElementById("btnNew").addEventListener("click", () => openForm(null));
     document.getElementById("btnCancel").addEventListener("click", closeForm);
@@ -1904,6 +2280,7 @@
     });
 
     document.getElementById("fSubject").addEventListener("input", updateSubjectLengthHint);
+    document.getElementById("fShortcut").addEventListener("input", updateShortcutHint);
 
     // Remembers which field (subject or body) had focus, to know where to insert the chosen date
     ["fSubject", "fBody"].forEach((id) => {
