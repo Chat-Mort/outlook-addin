@@ -2082,6 +2082,35 @@
     }
   }
 
+  const DIR_COLLAPSED_KEY = "modeles_pro_dir_collapsed_services_v1";
+  function loadDirCollapsedServices() {
+    try {
+      const raw = localStorage.getItem(DIR_COLLAPSED_KEY);
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch (e) {
+      return new Set();
+    }
+  }
+  function saveDirCollapsedServices(set) {
+    localStorage.setItem(DIR_COLLAPSED_KEY, JSON.stringify([...set]));
+  }
+  let dirCollapsedServices = loadDirCollapsedServices();
+
+  // Same grouping logic as groupByCategory (templates), applied to the "service" field.
+  function groupByService(list) {
+    const groups = new Map();
+    list.forEach((c) => {
+      const svc = c.service || "";
+      if (!groups.has(svc)) groups.set(svc, []);
+      groups.get(svc).push(c);
+    });
+    const orderedKeys = [...groups.keys()]
+      .filter((k) => k !== "")
+      .sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
+    if (groups.has("")) orderedKeys.push("");
+    return orderedKeys.map((k) => ({ service: k, items: groups.get(k) }));
+  }
+
   function renderDirectory() {
     const list = document.getElementById("directoryList");
     const empty = document.getElementById("directoryEmptyState");
@@ -2104,26 +2133,48 @@
     }
     empty.classList.add("hidden");
 
-    visible.forEach((c) => {
-      const card = document.createElement("div");
-      card.className = "template";
-      card.style.cursor = "default";
-      card.innerHTML = `
-        <div class="template-top">
-          <p class="template-name"></p>
-          <button class="template-icon-btn btn-edit" title="Edit">✎</button>
-          <button class="template-icon-btn danger btn-delete" title="Delete">🗑</button>
-        </div>
-        <p class="template-preview"></p>
-      `;
-      card.querySelector(".template-name").textContent = c.name;
-      const details = [c.role, c.service, c.phone, c.email].filter(Boolean).join(" · ");
-      card.querySelector(".template-preview").textContent = details;
+    const groups = groupByService(visible);
+    const showHeaders = groups.length > 1;
 
-      card.querySelector(".btn-edit").addEventListener("click", () => openDirForm(c));
-      card.querySelector(".btn-delete").addEventListener("click", () => deleteDirectoryEntry(c.id));
+    groups.forEach((group) => {
+      const isCollapsed = showHeaders && dirCollapsedServices.has(group.service);
 
-      list.appendChild(card);
+      if (showHeaders) {
+        const header = document.createElement("div");
+        header.className = "category-header" + (isCollapsed ? " collapsed" : "");
+        header.innerHTML = `<span><span class="chevron">▾</span> ${group.service || "Uncategorized"} (${group.items.length})</span>`;
+        header.addEventListener("click", () => {
+          if (dirCollapsedServices.has(group.service)) dirCollapsedServices.delete(group.service);
+          else dirCollapsedServices.add(group.service);
+          saveDirCollapsedServices(dirCollapsedServices);
+          renderDirectory();
+        });
+        list.appendChild(header);
+      }
+
+      if (isCollapsed) return;
+
+      group.items.forEach((c) => {
+        const card = document.createElement("div");
+        card.className = "template";
+        card.style.cursor = "default";
+        card.innerHTML = `
+          <div class="template-top">
+            <p class="template-name"></p>
+            <button class="template-icon-btn btn-edit" title="Edit">✎</button>
+            <button class="template-icon-btn danger btn-delete" title="Delete">🗑</button>
+          </div>
+          <p class="template-preview"></p>
+        `;
+        card.querySelector(".template-name").textContent = c.name;
+        const details = [c.role, c.phone, c.email].filter(Boolean).join(" · ");
+        card.querySelector(".template-preview").textContent = details;
+
+        card.querySelector(".btn-edit").addEventListener("click", () => openDirForm(c));
+        card.querySelector(".btn-delete").addEventListener("click", () => deleteDirectoryEntry(c.id));
+
+        list.appendChild(card);
+      });
     });
   }
 
