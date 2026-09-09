@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Swift Compose</title>
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bwip-js/dist/bwip-js-min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@latest/umd/index.min.js"></script>
 <style>
   :root {
     --ink: #1b2430;
@@ -94,6 +97,14 @@
     font-size: 9px;
   }
   .category-header.collapsed .chevron { transform: rotate(-90deg); }
+  .category-header .category-rename {
+    font-size: 11px;
+    text-transform: none;
+    letter-spacing: normal;
+    padding: 2px 4px;
+    border-radius: 4px;
+  }
+  .category-header .category-rename:hover { background: var(--accent-soft); }
 
   .sync-status {
     font-weight: 400;
@@ -234,6 +245,23 @@
     background: var(--card);
   }
   .form textarea { min-height: 110px; resize: vertical; }
+
+  #viewCodes label {
+    display: block;
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin: 8px 0 3px;
+  }
+  #viewCodes input, #viewCodes select {
+    width: 100%;
+    font-family: inherit;
+    font-size: 13px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 8px;
+    color: var(--ink);
+    background: var(--card);
+  }
   .form-hint {
     font-size: 11px;
     color: var(--ink-soft);
@@ -500,26 +528,39 @@
   }
 
   .hidden { display: none !important; }
+
+  /* Compact density: tighter paddings/margins to fit more on screen at once */
+  [data-density="compact"] main { padding: 6px 12px 12px; }
+  [data-density="compact"] .template {
+    padding: 4px 8px;
+    margin-bottom: 4px;
+  }
+  [data-density="compact"] .template-preview { margin-top: 1px; }
+  [data-density="compact"] .category-header { padding: 6px 2px 2px; margin-bottom: 3px; }
+  [data-density="compact"] .list-head { margin: 2px 0 4px; }
+  [data-density="compact"] .form { padding: 8px; margin-bottom: 8px; }
+  [data-density="compact"] .form label { margin: 5px 0 2px; }
+  [data-density="compact"] .form input,
+  [data-density="compact"] .form textarea { padding: 4px 6px; }
+  [data-density="compact"] .form textarea { min-height: 70px; }
+  [data-density="compact"] .attach-chip { padding: 3px 6px; }
+  [data-density="compact"] .sort-row { margin-bottom: 6px; }
+
   .tab-bar {
-    display: flex;
+    padding: 8px 16px;
     border-bottom: 1px solid var(--line);
     background: var(--card);
   }
-  .tab-btn {
-    flex: 1 1 auto;
-    border: none;
-    border-radius: 0;
-    background: transparent;
-    padding: 9px 6px;
-    font-size: 12px;
-    color: var(--ink-soft);
-    border-bottom: 2px solid transparent;
-  }
-  .tab-btn:hover { color: var(--accent); border-color: transparent; }
-  .tab-btn.active {
-    color: var(--accent);
+  #viewSelect {
+    width: 100%;
+    font-family: inherit;
+    font-size: 13px;
     font-weight: 600;
-    border-bottom: 2px solid var(--accent);
+    color: var(--accent);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 7px 8px;
+    background: var(--card);
   }
 
   .help-table {
@@ -551,14 +592,34 @@
     padding: 1px 4px;
     border-radius: 4px;
   }
+  .changelog-list {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    line-height: 1.6;
+  }
+  .changelog-list li { margin-bottom: 5px; }
 </style>
 </head>
+
 <body>
 
 <div class="tab-bar">
-  <button class="tab-btn active" data-view="viewTemplates">Templates</button>
-  <button class="tab-btn" data-view="viewDirectory">Directory</button>
-  <button class="tab-btn" data-view="viewHelp">Help</button>
+  <div style="display:flex; gap:6px; align-items:stretch;">
+    <select id="viewSelect" style="flex:1 1 auto;">
+      <option value="viewTemplates">Templates</option>
+      <option value="viewDirectory">Directory</option>
+      <option value="viewCodes">Codes</option>
+      <option value="viewHelp">Help</option>
+    </select>
+    <button class="ghost" id="btnThemeToggle" title="Toggle light/dark theme" style="flex:0 0 auto; padding:0 10px;">☀</button>
+    <button class="ghost" id="btnDensityToggle" title="Toggle compact/comfortable density" style="flex:0 0 auto; padding:0 10px;">▤</button>
+  </div>
+  <div style="position:relative; margin-top:6px;">
+    <input type="text" id="globalSearchInput" placeholder="Search templates &amp; contacts…" style="width:100%; font-family: inherit; font-size: 12.5px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; color: var(--ink); background: var(--card);" />
+    <div id="globalSearchResults" class="tag-menu hidden" style="left:0; right:0; top:calc(100% + 4px); width:auto; max-height:260px; overflow-y:auto;"></div>
+  </div>
 </div>
 
 <main>
@@ -681,6 +742,10 @@
         <span>Shortcuts</span>
         <span class="tag-menu-help" title="Pastes an existing ##shortcut at the cursor, so you don't have to remember its exact spelling.">?</span>
       </div>
+      <div class="tag-menu-item" id="tagItemContact">
+        <span>Contact</span>
+        <span class="tag-menu-help" title="Search the Directory and paste a contact's name and extension at the cursor.">?</span>
+      </div>
     </div>
 
     <!-- "Day" detail view -->
@@ -733,6 +798,13 @@
       <div id="shortcutsListBox"></div>
     </div>
 
+    <!-- "Contact" detail view -->
+    <div id="tagMenuContact" class="hidden">
+      <div class="tag-menu-back" id="contactBack">‹ Back</div>
+      <input type="text" id="contactMenuSearch" placeholder="Search contacts…" style="width:100%; font-family: inherit; font-size: 12.5px; border: 1px solid var(--line); border-radius: 6px; padding: 5px 6px; color: var(--ink); background: var(--card); margin-bottom: 6px;" />
+      <div id="contactListBox" style="max-height:220px; overflow-y:auto;"></div>
+    </div>
+
   </div>
 </div>
 
@@ -771,6 +843,43 @@
     <div class="form-actions">
       <button class="ghost" id="dirBtnCancel">Cancel</button>
       <button class="primary" id="dirBtnSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="viewCodes" class="hidden">
+  <h2 style="font-size:12px; color: var(--ink-soft); margin: 4px 0 10px;">Code generator</h2>
+
+  <label for="codeType">Type</label>
+  <select id="codeType">
+    <option value="qrcode">QR Code</option>
+    <option value="datamatrix">Data Matrix</option>
+    <option value="code128">Barcode — Code 128</option>
+    <option value="ean13">Barcode — EAN-13</option>
+    <option value="upca">Barcode — UPC-A</option>
+    <option value="pdf417">PDF417</option>
+    <option value="azteccode">Aztec Code</option>
+  </select>
+
+  <label for="codeValue" style="margin-top:10px;">Value(s) to encode — one per line for batch</label>
+  <textarea id="codeValue" placeholder="Text, number, reference…&#10;One per line to generate several at once" style="width:100%; min-height:64px; font-family: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; color: var(--ink); background: var(--card); resize: vertical;"></textarea>
+  <p id="codeHint" class="form-hint" style="margin-top:4px;"></p>
+
+  <button class="primary" id="btnGenerateCode" style="width:100%; margin-top:10px;">Generate</button>
+
+  <div id="codeResultsList" style="margin-top:14px;"></div>
+  <button class="ghost" id="btnDownloadAllCodes" style="width:100%; margin-top:8px; display:none;">Download all as ZIP</button>
+
+  <div id="codeHistoryBox" style="margin-top:16px;"></div>
+
+  <div style="border-top: 1px solid var(--line); margin-top:18px; padding-top:14px;">
+    <h2 style="font-size:12px; color: var(--ink-soft); margin: 0 0 10px;">Decode an existing code</h2>
+    <label for="decodeFileInput">Image containing a code</label>
+    <input type="file" id="decodeFileInput" accept="image/*" />
+    <div id="decodeResultBox" style="margin-top:10px; display:none;">
+      <p style="font-size:11px; color: var(--ink-soft); margin: 0 0 2px;">Decoded value (<span id="decodeFormat"></span>)</p>
+      <div id="decodeValue" style="font-size:13px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; word-break: break-all;"></div>
+      <button class="ghost" id="btnCopyDecoded" style="margin-top:6px;">Copy</button>
     </div>
   </div>
 </div>
@@ -825,6 +934,27 @@
     account). Attachments and the directory stay local to this browser/device only. Use
     Export/Import (⬇/⬆) for a manual backup of either.
   </p>
+
+  <h2 style="font-size:13px; margin: 16px 0 10px;">Changelog</h2>
+  <ul class="changelog-list">
+    <li>Insert a directory contact directly into a mail via the ⚡ menu, and copy any phone number to the clipboard with one click.</li>
+    <li>Preview button (👁) on each template card — see the resolved subject/body before actually inserting.</li>
+    <li>Attachment names shown on hover over the 📎 badge.</li>
+    <li>Directory: rename a service across all its contacts at once, grouped/collapsible by service.</li>
+    <li>Directory tab: contacts with name/role/service/phone/email, search, sync, export/import.</li>
+    <li>Help tab (this one).</li>
+    <li>Auto-resolve ##shortcuts as soon as a draft with unresolved ones is opened; alert on unmatched ones; undo a resolution.</li>
+    <li>Duplicate-shortcut warning in the template form.</li>
+    <li>Collapsible categories, "Recently used" sort, sync status indicator, attachment size warning, subject length hint, basic body formatting (bold/italic/bullets).</li>
+    <li>Native Outlook template name field (informational link between the two systems).</li>
+    <li>Clone, search, export/import, and undo-delete for templates.</li>
+    <li>{{dn}} (delivery note number) and {{c}} (calendar picker) tags; ⚡ tag menu with Day/Week/Calendar/Delivery note/Shortcuts.</li>
+    <li>Attachments: "final" vs "blank placeholder" toggle, download/import reminder flow.</li>
+    <li>Optional recipients, categories, and shortcuts (##name) per template, with subject/body-aware resolution.</li>
+    <li>Renamed to Swift Compose, translated to English, storage moved to synced RoamingSettings.</li>
+    <li>{{d}}/{{bd}}/{{w}} date tags, business-day and ISO week logic, dark mode, pinnable panel.</li>
+    <li>First version: templates with subject/body, auto-created new email or filled an open draft.</li>
+  </ul>
 </div>
 </main>
 
@@ -857,6 +987,37 @@
   </div>
 </div>
 
+<!-- "Rename service" modal: renames a directory service label for every contact in that group -->
+<div id="renameServiceModalOverlay" class="modal-overlay hidden">
+  <div class="modal-card">
+    <h3>Rename service</h3>
+    <input type="text" id="renameServiceModalInput" style="width:100%; font-family: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; color: var(--ink); background: var(--card);" />
+    <div class="modal-actions">
+      <button class="ghost" id="renameServiceModalCancel">Cancel</button>
+      <button class="primary" id="renameServiceModalConfirm">Rename</button>
+    </div>
+  </div>
+</div>
+
+<!-- Template preview: shows the resolved subject/body without touching any email.
+     {{c}} and {{dn}} show a placeholder instead of actually prompting, since this is just a look. -->
+<div id="previewModalOverlay" class="modal-overlay hidden">
+  <div class="modal-card" style="width: 280px; max-height: 80vh; overflow-y: auto;">
+    <h3 id="previewModalTitle">Preview</h3>
+    <p style="font-size:11px; color: var(--ink-soft); margin: 0 0 8px;">
+      {{c}} and {{dn}} show a placeholder here — you'll be asked for the real value on actual insertion.
+    </p>
+    <p style="font-size:11px; color: var(--ink-soft); margin: 0 0 2px; font-weight:600;">Subject</p>
+    <div id="previewSubject" style="font-size:12.5px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin-bottom: 10px; word-break: break-word;"></div>
+    <p style="font-size:11px; color: var(--ink-soft); margin: 0 0 2px; font-weight:600;">Body</p>
+    <div id="previewBody" style="font-size:12.5px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin-bottom: 6px; word-break: break-word;"></div>
+    <div id="previewAttachments" style="font-size:11.5px; color: var(--ink-soft);"></div>
+    <div class="modal-actions">
+      <button class="primary" id="previewModalClose">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Attachment reminder: shown when a new email was created from the inbox and the template
      had attachments that couldn't be added automatically (Outlook API limitation). -->
 <div id="attachmentReminderOverlay" class="modal-overlay hidden">
@@ -875,6 +1036,8 @@
   const ATTACH_STORAGE_KEY = "modeles_pro_attachments_v1";
   const SORT_KEY = "modeles_pro_sort_v1";
   const DIRECTORY_KEY = "modeles_pro_directory_v1";
+  const LAST_VIEW_KEY = "modeles_pro_last_view_v1";
+  const CODE_HISTORY_KEY = "modeles_pro_code_history_v1";
   let templates = [];
   let editingId = null;
   let formAttachments = [];
@@ -1337,6 +1500,7 @@
         card.innerHTML = `
           <div class="template-top">
             <p class="template-name"></p>
+            <button class="template-icon-btn btn-preview" title="Preview">👁</button>
             <button class="template-icon-btn btn-clone" title="Duplicate">⧉</button>
             <button class="template-icon-btn btn-edit" title="Edit">✎</button>
             <button class="template-icon-btn danger btn-delete" title="Delete">🗑</button>
@@ -1353,6 +1517,7 @@
             const badge = document.createElement("span");
             badge.className = "template-badge";
             badge.textContent = `📎 ${t.attachments.length}`;
+            badge.title = t.attachments.map((a) => `${a.name}${a.final ? " (final)" : " (blank)"}`).join("\n");
             meta.appendChild(badge);
           }
           if (t.nativeTemplate) {
@@ -1367,10 +1532,12 @@
         // The whole card is clickable to insert the template...
         card.addEventListener("click", () => insertTemplate(t));
 
-        // ...except the clone/edit/delete icons, which shouldn't trigger insertion.
+        // ...except the preview/clone/edit/delete icons, which shouldn't trigger insertion.
+        const previewBtn = card.querySelector(".btn-preview");
         const cloneBtn = card.querySelector(".btn-clone");
         const editBtn = card.querySelector(".btn-edit");
         const deleteBtn = card.querySelector(".btn-delete");
+        previewBtn.addEventListener("click", (e) => { e.stopPropagation(); showTemplatePreview(t); });
         cloneBtn.addEventListener("click", (e) => { e.stopPropagation(); cloneTemplate(t); });
         editBtn.addEventListener("click", (e) => { e.stopPropagation(); openForm(t); });
         deleteBtn.addEventListener("click", (e) => { e.stopPropagation(); deleteTemplate(t.id); });
@@ -1663,6 +1830,241 @@
     });
   }
 
+  // ===== Code generator (QR, barcodes, Data Matrix, etc. — via bwip-js, entirely local) =====
+
+  const CODE_TYPE_HINTS = {
+    qrcode: "Any text, URL, or number.",
+    datamatrix: "Any text or number — compact, good for small labels.",
+    code128: "Any text or number.",
+    ean13: "Exactly 12 or 13 digits.",
+    upca: "Exactly 11 or 12 digits.",
+    pdf417: "Any text — larger amounts of data.",
+    azteccode: "Any text or number."
+  };
+
+  function updateCodeHint() {
+    const type = document.getElementById("codeType").value;
+    document.getElementById("codeHint").textContent = CODE_TYPE_HINTS[type] || "";
+  }
+
+  // Renders one value to an offscreen canvas and returns it, or null on failure
+  // (with a status message already shown).
+  function renderOneCode(type, value) {
+    const canvas = document.createElement("canvas");
+    try {
+      bwipjs.toCanvas(canvas, {
+        bcid: type,
+        text: value,
+        scale: 3,
+        includetext: type !== "qrcode" && type !== "datamatrix" && type !== "azteccode",
+        textxalign: "center"
+      });
+      return canvas;
+    } catch (e) {
+      setStatus(`Couldn't generate "${value}": ${e.message}`, true);
+      return null;
+    }
+  }
+
+  function generateCode() {
+    const type = document.getElementById("codeType").value;
+    const values = document.getElementById("codeValue").value
+      .split("\n").map((v) => v.trim()).filter(Boolean);
+    const resultsList = document.getElementById("codeResultsList");
+    const downloadAllBtn = document.getElementById("btnDownloadAllCodes");
+    resultsList.innerHTML = "";
+    downloadAllBtn.style.display = "none";
+
+    if (values.length === 0) { setStatus("Enter at least one value to encode.", true); return; }
+    if (typeof bwipjs === "undefined") {
+      setStatus("Code generator library failed to load — check your connection and reload the panel.", true);
+      return;
+    }
+
+    let successCount = 0;
+    values.forEach((value) => {
+      const canvas = renderOneCode(type, value);
+      if (!canvas) return;
+      successCount++;
+
+      const row = document.createElement("div");
+      row.style.cssText = "text-align:center; margin-bottom:14px;";
+      canvas.style.cssText = "max-width:100%; background:#fff; padding:8px; border-radius:8px;";
+      row.appendChild(canvas);
+
+      const dlBtn = document.createElement("button");
+      dlBtn.className = "ghost";
+      dlBtn.textContent = "Download PNG";
+      dlBtn.style.cssText = "display:inline-block; margin:6px 4px 0;";
+      dlBtn.addEventListener("click", () => downloadCanvasAsPng(canvas, type, value));
+      row.appendChild(dlBtn);
+
+      const printBtn = document.createElement("button");
+      printBtn.className = "ghost";
+      printBtn.textContent = "Print";
+      printBtn.style.cssText = "display:inline-block; margin:6px 4px 0;";
+      printBtn.addEventListener("click", () => printCanvas(canvas));
+      row.appendChild(printBtn);
+
+      resultsList.appendChild(row);
+      addToCodeHistory(type, value);
+    });
+
+    if (successCount > 1) downloadAllBtn.style.display = "block";
+    if (successCount > 0) setStatus(`Generated ${successCount} code(s).`);
+    renderCodeHistory();
+  }
+
+  function downloadCanvasAsPng(canvas, type, value) {
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/png");
+    a.download = `code-${type}-${value.replace(/[^a-z0-9]/gi, "_").slice(0, 30)}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  // Prints a single code via a hidden iframe rather than window.open(), since pop-ups can be
+  // blocked inside the Outlook task pane host.
+  function printCanvas(canvas) {
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed; right:0; bottom:0; width:0; height:0; border:0;";
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(`<html><body style="margin:0; display:flex; align-items:center; justify-content:center;"><img src="${canvas.toDataURL("image/png")}" style="max-width:100%;" /></body></html>`);
+    doc.close();
+    iframe.onload = () => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      setTimeout(() => document.body.removeChild(iframe), 1000);
+    };
+  }
+
+  function downloadAllCodesAsZip() {
+    if (typeof JSZip === "undefined") {
+      setStatus("ZIP library failed to load — check your connection.", true);
+      return;
+    }
+    const canvases = document.querySelectorAll("#codeResultsList canvas");
+    if (canvases.length === 0) return;
+    const zip = new JSZip();
+    const type = document.getElementById("codeType").value;
+
+    canvases.forEach((canvas, i) => {
+      const dataUrl = canvas.toDataURL("image/png");
+      const base64 = dataUrl.split(",")[1];
+      zip.file(`code-${type}-${i + 1}.png`, base64, { base64: true });
+    });
+
+    zip.generateAsync({ type: "blob" }).then((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `codes-${type}-${Date.now()}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    });
+  }
+
+  // ----- Recent codes history (last 5, newest first) -----
+
+  function loadCodeHistory() {
+    try {
+      const raw = localStorage.getItem(CODE_HISTORY_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  function addToCodeHistory(type, value) {
+    let history = loadCodeHistory();
+    history = history.filter((h) => !(h.type === type && h.value === value));
+    history.unshift({ type, value, ts: Date.now() });
+    history = history.slice(0, 5);
+    localStorage.setItem(CODE_HISTORY_KEY, JSON.stringify(history));
+  }
+  function renderCodeHistory() {
+    const box = document.getElementById("codeHistoryBox");
+    const history = loadCodeHistory();
+    if (history.length === 0) { box.innerHTML = ""; return; }
+
+    box.innerHTML = `<p style="font-size:11px; color: var(--ink-soft); margin: 0 0 6px; text-transform:uppercase; letter-spacing:0.4px;">Recent</p>`;
+    history.forEach((h) => {
+      const row = document.createElement("div");
+      row.className = "reminder-file-row";
+      row.style.cursor = "pointer";
+      row.innerHTML = `<span>${h.value}</span><span style="flex:0 0 auto; font-size:10.5px; color:var(--ink-soft);">${h.type}</span>`;
+      row.addEventListener("click", () => {
+        document.getElementById("codeType").value = h.type;
+        document.getElementById("codeValue").value = h.value;
+        updateCodeHint();
+      });
+      box.appendChild(row);
+    });
+  }
+
+  // ----- Decode an existing code from an uploaded image (via ZXing, entirely local) -----
+
+  function decodeCodeImage(file) {
+    if (typeof ZXing === "undefined") {
+      setStatus("Decoder library failed to load — check your connection and reload the panel.", true);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const zxingReader = new ZXing.BrowserMultiFormatReader();
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          canvas.getContext("2d").drawImage(img, 0, 0);
+          const result = zxingReader.decodeFromCanvas(canvas);
+          document.getElementById("decodeValue").textContent = result.getText();
+          document.getElementById("decodeFormat").textContent = result.getBarcodeFormat
+            ? String(result.getBarcodeFormat())
+            : "";
+          document.getElementById("decodeResultBox").style.display = "block";
+          setStatus("Code decoded.");
+        } catch (e) {
+          document.getElementById("decodeResultBox").style.display = "none";
+          setStatus("Couldn't find or read a code in that image.", true);
+        }
+      };
+      img.onerror = () => setStatus("Couldn't load that image.", true);
+      img.src = String(reader.result);
+    };
+    reader.onerror = () => setStatus("Couldn't read that file.", true);
+    reader.readAsDataURL(file);
+  }
+
+  function showTemplatePreview(t) {
+    let subjectRaw = resolveShortcuts(t.subject || "", undefined, false, "subject")
+      .replaceAll("{{c}}", "[date to be chosen]")
+      .replaceAll("{{dn}}", "DN[number to be entered]");
+    let bodyRaw = resolveShortcuts(t.body || "", undefined, false, "body")
+      .replaceAll("{{c}}", "[date to be chosen]")
+      .replaceAll("{{dn}}", "DN[number to be entered]");
+
+    const subject = applyPlaceholders(subjectRaw);
+    const bodyHtml = markdownishToHtml(applyPlaceholders(bodyRaw));
+
+    document.getElementById("previewModalTitle").textContent = `Preview — ${t.name}`;
+    document.getElementById("previewSubject").textContent = subject || "(empty)";
+    document.getElementById("previewBody").innerHTML = bodyHtml || "(empty)";
+
+    const attachments = t.attachments || [];
+    document.getElementById("previewAttachments").textContent = attachments.length > 0
+      ? `📎 ${attachments.map((a) => `${a.name}${a.final ? " (final)" : " (blank)"}`).join(", ")}`
+      : "";
+
+    document.getElementById("previewModalOverlay").classList.remove("hidden");
+  }
+
   async function insertTemplate(t) {
     let subjectRaw = resolveShortcuts(t.subject || "", undefined, false, "subject");
     let bodyRaw = resolveShortcuts(t.body || "", undefined, false, "body");
@@ -1862,7 +2264,31 @@
       .catch((err) => setStatus("Insert error: " + (err ? err.message : "unknown"), true));
   }
 
+  const THEME_OVERRIDE_KEY = "modeles_pro_theme_override_v1";
+  const DENSITY_KEY = "modeles_pro_density_v1";
+
+  function applyDensity() {
+    const density = localStorage.getItem(DENSITY_KEY) || "comfortable";
+    document.body.setAttribute("data-density", density);
+    const btn = document.getElementById("btnDensityToggle");
+    if (btn) btn.title = density === "compact" ? "Switch to comfortable density" : "Switch to compact density";
+  }
+
+  function toggleDensity() {
+    const current = localStorage.getItem(DENSITY_KEY) || "comfortable";
+    const next = current === "compact" ? "comfortable" : "compact";
+    localStorage.setItem(DENSITY_KEY, next);
+    applyDensity();
+  }
+
   function applyOfficeTheme() {
+    // A manual override (via the ☀/☾ button) always wins over auto-detection.
+    const override = localStorage.getItem(THEME_OVERRIDE_KEY);
+    if (override === "dark" || override === "light") {
+      setTheme(override);
+      return;
+    }
+
     let isDark = false;
     try {
       const theme = Office.context.officeTheme;
@@ -1881,7 +2307,20 @@
     } catch (e) {
       isDark = false;
     }
-    document.body.setAttribute("data-theme", isDark ? "dark" : "light");
+    setTheme(isDark ? "dark" : "light");
+  }
+
+  function setTheme(mode) {
+    document.body.setAttribute("data-theme", mode);
+    const btn = document.getElementById("btnThemeToggle");
+    if (btn) btn.textContent = mode === "dark" ? "☾" : "☀";
+  }
+
+  function toggleThemeOverride() {
+    const current = document.body.getAttribute("data-theme") === "dark" ? "dark" : "light";
+    const next = current === "dark" ? "light" : "dark";
+    localStorage.setItem(THEME_OVERRIDE_KEY, next);
+    setTheme(next);
   }
 
   // Inserts text at the cursor position in a text field/textarea, replacing the current
@@ -2097,6 +2536,51 @@
   let dirCollapsedServices = loadDirCollapsedServices();
 
   // Same grouping logic as groupByCategory (templates), applied to the "service" field.
+  // Opens the "Rename service" modal for a given service name, and applies the rename to
+  // every directory entry in that group at once.
+  function promptRenameService(oldName) {
+    const overlay = document.getElementById("renameServiceModalOverlay");
+    const input = document.getElementById("renameServiceModalInput");
+    const confirmBtn = document.getElementById("renameServiceModalConfirm");
+    const cancelBtn = document.getElementById("renameServiceModalCancel");
+
+    input.value = oldName;
+    overlay.classList.remove("hidden");
+    input.focus();
+    input.select();
+
+    function cleanup() {
+      overlay.classList.add("hidden");
+      confirmBtn.removeEventListener("click", onConfirm);
+      cancelBtn.removeEventListener("click", onCancel);
+    }
+    function onConfirm() {
+      const newName = input.value.trim();
+      if (!newName) return;
+      cleanup();
+      if (newName === oldName) return;
+
+      let count = 0;
+      directory.forEach((c) => {
+        if (c.service === oldName) { c.service = newName; count++; }
+      });
+      // Carries over the collapsed/expanded state to the renamed group.
+      if (dirCollapsedServices.has(oldName)) {
+        dirCollapsedServices.delete(oldName);
+        dirCollapsedServices.add(newName);
+        saveDirCollapsedServices(dirCollapsedServices);
+      }
+      saveDirectory();
+      renderDirectory();
+      setStatus(`Renamed "${oldName}" to "${newName}" for ${count} contact(s).`);
+    }
+    function onCancel() {
+      cleanup();
+    }
+    confirmBtn.addEventListener("click", onConfirm);
+    cancelBtn.addEventListener("click", onCancel);
+  }
+
   function groupByService(list) {
     const groups = new Map();
     list.forEach((c) => {
@@ -2142,13 +2626,23 @@
       if (showHeaders) {
         const header = document.createElement("div");
         header.className = "category-header" + (isCollapsed ? " collapsed" : "");
-        header.innerHTML = `<span><span class="chevron">▾</span> ${group.service || "Uncategorized"} (${group.items.length})</span>`;
+        header.innerHTML = `
+          <span><span class="chevron">▾</span> ${group.service || "Uncategorized"} (${group.items.length})</span>
+          ${group.service ? '<span class="category-rename" title="Rename this service for all its contacts">✎</span>' : ""}
+        `;
         header.addEventListener("click", () => {
           if (dirCollapsedServices.has(group.service)) dirCollapsedServices.delete(group.service);
           else dirCollapsedServices.add(group.service);
           saveDirCollapsedServices(dirCollapsedServices);
           renderDirectory();
         });
+        const renameIcon = header.querySelector(".category-rename");
+        if (renameIcon) {
+          renameIcon.addEventListener("click", (e) => {
+            e.stopPropagation();
+            promptRenameService(group.service);
+          });
+        }
         list.appendChild(header);
       }
 
@@ -2161,6 +2655,7 @@
         card.innerHTML = `
           <div class="template-top">
             <p class="template-name"></p>
+            ${c.phone ? '<button class="template-icon-btn btn-copy-phone" title="Copy phone number">📋</button>' : ""}
             <button class="template-icon-btn btn-edit" title="Edit">✎</button>
             <button class="template-icon-btn danger btn-delete" title="Delete">🗑</button>
           </div>
@@ -2170,12 +2665,26 @@
         const details = [c.role, c.phone, c.email].filter(Boolean).join(" · ");
         card.querySelector(".template-preview").textContent = details;
 
+        const copyBtn = card.querySelector(".btn-copy-phone");
+        if (copyBtn) {
+          copyBtn.addEventListener("click", () => copyToClipboard(c.phone, `Phone number for ${c.name}`));
+        }
         card.querySelector(".btn-edit").addEventListener("click", () => openDirForm(c));
         card.querySelector(".btn-delete").addEventListener("click", () => deleteDirectoryEntry(c.id));
 
         list.appendChild(card);
       });
     });
+  }
+
+  function copyToClipboard(text, label) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => setStatus(`${label} copied.`))
+        .catch(() => setStatus("Couldn't copy to clipboard.", true));
+    } else {
+      setStatus("Clipboard access not available.", true);
+    }
   }
 
   function openDirForm(c) {
@@ -2268,19 +2777,25 @@
     document.getElementById("sortSelect").value = currentSort;
     renderList();
     applyOfficeTheme();
+    document.getElementById("btnThemeToggle").addEventListener("click", toggleThemeOverride);
+    applyDensity();
+    document.getElementById("btnDensityToggle").addEventListener("click", toggleDensity);
 
     loadDirectory();
     renderDirectory();
 
-    // Tab switching
-    document.querySelectorAll(".tab-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        ["viewTemplates", "viewDirectory", "viewHelp"].forEach((id) => {
-          document.getElementById(id).classList.toggle("hidden", id !== btn.dataset.view);
-        });
+    // View switching — restores whichever section was open last time
+    function switchView(selected) {
+      ["viewTemplates", "viewDirectory", "viewCodes", "viewHelp"].forEach((id) => {
+        document.getElementById(id).classList.toggle("hidden", id !== selected);
       });
+      localStorage.setItem(LAST_VIEW_KEY, selected);
+    }
+    const lastView = localStorage.getItem(LAST_VIEW_KEY) || "viewTemplates";
+    document.getElementById("viewSelect").value = lastView;
+    switchView(lastView);
+    document.getElementById("viewSelect").addEventListener("change", (e) => {
+      switchView(e.target.value);
     });
 
     // Directory
@@ -2344,6 +2859,7 @@
     const tagMenuDay = document.getElementById("tagMenuDay");
     const tagMenuWeek = document.getElementById("tagMenuWeek");
     const tagMenuShortcuts = document.getElementById("tagMenuShortcuts");
+    const tagMenuContact = document.getElementById("tagMenuContact");
     let tagMenuTargetId = "fBody";
 
     function closeTagMenu() {
@@ -2351,6 +2867,7 @@
       tagMenuDay.classList.add("hidden");
       tagMenuWeek.classList.add("hidden");
       tagMenuShortcuts.classList.add("hidden");
+      tagMenuContact.classList.add("hidden");
       tagMenuList.classList.remove("hidden");
     }
 
@@ -2361,6 +2878,7 @@
         tagMenuDay.classList.add("hidden");
         tagMenuWeek.classList.add("hidden");
         tagMenuShortcuts.classList.add("hidden");
+        tagMenuContact.classList.add("hidden");
         tagMenuList.classList.remove("hidden");
         tagMenu.classList.remove("hidden");
         // Positions the menu right under the clicked button
@@ -2488,6 +3006,45 @@
       tagMenuList.classList.remove("hidden");
     });
 
+    // "Contact" item: opens a sub-view to search and insert a Directory contact
+    function renderContactMenuList(query) {
+      const box = document.getElementById("contactListBox");
+      let matches = directory.slice().sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
+      if (query) {
+        const q = query.toLowerCase();
+        matches = matches.filter((c) => c.name.toLowerCase().includes(q) || (c.service || "").toLowerCase().includes(q));
+      }
+      if (matches.length === 0) {
+        box.innerHTML = `<div style="font-size:11.5px; color: var(--ink-soft); padding: 6px 4px;">No contacts found.</div>`;
+        return;
+      }
+      box.innerHTML = matches.map((c) =>
+        `<div class="tag-menu-item" data-contact-id="${c.id}"><span>${c.name}</span><span class="tag-menu-help" title="${[c.role, c.service].filter(Boolean).join(" · ").replace(/"/g, "&quot;")}">?</span></div>`
+      ).join("");
+      box.querySelectorAll("[data-contact-id]").forEach((row) => {
+        row.addEventListener("click", () => {
+          const c = directory.find((x) => x.id === row.dataset.contactId);
+          if (!c) return;
+          const text = c.phone ? `${c.name} - ext. ${c.phone}` : c.name;
+          insertAtCursor(document.getElementById(tagMenuTargetId), text);
+          closeTagMenu();
+        });
+      });
+    }
+    document.getElementById("tagItemContact").addEventListener("click", () => {
+      document.getElementById("contactMenuSearch").value = "";
+      renderContactMenuList("");
+      tagMenuList.classList.add("hidden");
+      tagMenuContact.classList.remove("hidden");
+    });
+    document.getElementById("contactBack").addEventListener("click", () => {
+      tagMenuContact.classList.add("hidden");
+      tagMenuList.classList.remove("hidden");
+    });
+    document.getElementById("contactMenuSearch").addEventListener("input", (e) => {
+      renderContactMenuList(e.target.value.trim());
+    });
+
     // The "Resolve ## shortcuts" button only makes sense in an already-open draft
     if (isComposeMode()) {
       const btnResolve = document.getElementById("btnResolveShortcuts");
@@ -2499,6 +3056,99 @@
 
     document.getElementById("attachmentReminderClose").addEventListener("click", () => {
       document.getElementById("attachmentReminderOverlay").classList.add("hidden");
+    });
+
+    document.getElementById("previewModalClose").addEventListener("click", () => {
+      document.getElementById("previewModalOverlay").classList.add("hidden");
+    });
+
+    // Codes tab
+    updateCodeHint();
+    document.getElementById("codeType").addEventListener("change", updateCodeHint);
+    document.getElementById("btnGenerateCode").addEventListener("click", generateCode);
+    document.getElementById("btnDownloadAllCodes").addEventListener("click", downloadAllCodesAsZip);
+    renderCodeHistory();
+
+    // Global search (templates + directory combined)
+    const globalSearchInput = document.getElementById("globalSearchInput");
+    const globalSearchResults = document.getElementById("globalSearchResults");
+
+    function renderGlobalSearch(query) {
+      if (!query) { globalSearchResults.classList.add("hidden"); return; }
+      const q = query.toLowerCase();
+
+      const matchedTemplates = templates.filter((t) =>
+        t.name.toLowerCase().includes(q) || (t.subject || "").toLowerCase().includes(q)
+      ).slice(0, 8);
+      const matchedContacts = directory.filter((c) =>
+        c.name.toLowerCase().includes(q) || (c.service || "").toLowerCase().includes(q)
+      ).slice(0, 8);
+
+      if (matchedTemplates.length === 0 && matchedContacts.length === 0) {
+        globalSearchResults.innerHTML = `<div style="font-size:11.5px; color: var(--ink-soft); padding: 6px 4px;">No matches.</div>`;
+        globalSearchResults.classList.remove("hidden");
+        return;
+      }
+
+      let html = "";
+      matchedTemplates.forEach((t) => {
+        html += `<div class="tag-menu-item" data-kind="template" data-id="${t.id}"><span>${t.name}</span><span class="tag-menu-help" title="Template">T</span></div>`;
+      });
+      matchedContacts.forEach((c) => {
+        html += `<div class="tag-menu-item" data-kind="contact" data-id="${c.id}"><span>${c.name}</span><span class="tag-menu-help" title="Contact">C</span></div>`;
+      });
+      globalSearchResults.innerHTML = html;
+      globalSearchResults.classList.remove("hidden");
+
+      globalSearchResults.querySelectorAll("[data-kind]").forEach((row) => {
+        row.addEventListener("click", () => {
+          const kind = row.dataset.kind;
+          const id = row.dataset.id;
+          globalSearchResults.classList.add("hidden");
+          globalSearchInput.value = "";
+          if (kind === "template") {
+            const t = templates.find((x) => x.id === id);
+            document.getElementById("viewSelect").value = "viewTemplates";
+            switchView("viewTemplates");
+            if (t) insertTemplate(t);
+          } else {
+            const c = directory.find((x) => x.id === id);
+            document.getElementById("viewSelect").value = "viewDirectory";
+            switchView("viewDirectory");
+            if (c) openDirForm(c);
+          }
+        });
+      });
+    }
+
+    globalSearchInput.addEventListener("input", (e) => renderGlobalSearch(e.target.value.trim()));
+    document.addEventListener("click", (e) => {
+      if (!globalSearchResults.contains(e.target) && e.target !== globalSearchInput) {
+        globalSearchResults.classList.add("hidden");
+      }
+    });
+
+    // "/" focuses the global search from anywhere (unless already typing in a field); Escape closes it.
+    document.addEventListener("keydown", (e) => {
+      const tag = (document.activeElement && document.activeElement.tagName) || "";
+      const isTyping = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+      if (e.key === "/" && !isTyping) {
+        e.preventDefault();
+        globalSearchInput.focus();
+      } else if (e.key === "Escape") {
+        globalSearchResults.classList.add("hidden");
+        if (document.activeElement === globalSearchInput) globalSearchInput.blur();
+      }
+    });
+
+    // Codes tab: decode-an-image
+    document.getElementById("decodeFileInput").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) decodeCodeImage(file);
+      e.target.value = "";
+    });
+    document.getElementById("btnCopyDecoded").addEventListener("click", () => {
+      copyToClipboard(document.getElementById("decodeValue").textContent, "Decoded value");
     });
   });
 </script>
