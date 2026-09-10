@@ -546,6 +546,11 @@
   [data-density="compact"] .attach-chip { padding: 3px 6px; }
   [data-density="compact"] .sort-row { margin-bottom: 6px; }
 
+  #decodeDropZone.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
   .tab-bar {
     padding: 8px 16px;
     border-bottom: 1px solid var(--line);
@@ -865,6 +870,14 @@
   <textarea id="codeValue" placeholder="Text, number, reference…&#10;One per line to generate several at once" style="width:100%; min-height:64px; font-family: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; color: var(--ink); background: var(--card); resize: vertical;"></textarea>
   <p id="codeHint" class="form-hint" style="margin-top:4px;"></p>
 
+  <!-- Data Matrix only: quick-fill for scanner "keyboard wedge" login codes -->
+  <div id="loginCodeHelper" style="display:none; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top:8px;">
+    <p style="font-size:11px; color: var(--ink-soft); margin: 0 0 6px;">Login code helper — builds a \tLOGIN\tPASSWORD\t\t\r\n line for you</p>
+    <input type="text" id="loginCodeUser" placeholder="Login" style="width:100%; font-family: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; color: var(--ink); background: var(--card); margin-bottom:6px;" />
+    <input type="text" id="loginCodePass" placeholder="Password" style="width:100%; font-family: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; color: var(--ink); background: var(--card); margin-bottom:6px;" />
+    <button class="ghost" id="btnAddLoginCode" style="width:100%;">Add to list</button>
+  </div>
+
   <button class="primary" id="btnGenerateCode" style="width:100%; margin-top:10px;">Generate</button>
 
   <div id="codeResultsList" style="margin-top:14px;"></div>
@@ -874,8 +887,10 @@
 
   <div style="border-top: 1px solid var(--line); margin-top:18px; padding-top:14px;">
     <h2 style="font-size:12px; color: var(--ink-soft); margin: 0 0 10px;">Decode an existing code</h2>
-    <label for="decodeFileInput">Image containing a code</label>
-    <input type="file" id="decodeFileInput" accept="image/*" />
+    <div id="decodeDropZone" style="border: 1px dashed var(--line); border-radius: 8px; padding: 14px 10px; text-align:center; cursor:pointer;">
+      <p style="font-size:11.5px; color: var(--ink-soft); margin:0;">Drag & drop an image here, or click to choose</p>
+      <input type="file" id="decodeFileInput" accept="image/*" class="hidden" />
+    </div>
     <div id="decodeResultBox" style="margin-top:10px; display:none;">
       <p style="font-size:11px; color: var(--ink-soft); margin: 0 0 2px;">Decoded value (<span id="decodeFormat"></span>)</p>
       <div id="decodeValue" style="font-size:13px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; word-break: break-all;"></div>
@@ -930,10 +945,19 @@
 
   <h2 style="font-size:13px; margin: 16px 0 10px;">Storage</h2>
   <p class="help-text">
-    Template text is synced to your mailbox (works across devices signed into the same
-    account). Attachments and the directory stay local to this browser/device only. Use
-    Export/Import (⬇/⬆) for a manual backup of either.
+    Template text and the directory are synced to your mailbox (RoamingSettings — works across
+    devices signed into the same account). Attachments and code history stay local to this
+    browser/device only. Use Export/Import (⬇/⬆) for a manual backup of either.
   </p>
+  <div style="margin: 8px 0 4px;">
+    <div style="display:flex; justify-content:space-between; font-size:11px; color: var(--ink-soft); margin-bottom:3px;">
+      <span>Synced storage used</span>
+      <span id="storageGaugeText">–</span>
+    </div>
+    <div style="height:6px; border-radius:3px; background: var(--line); overflow:hidden;">
+      <div id="storageGaugeBar" style="height:100%; width:0%; background: var(--accent); border-radius:3px; transition: width 0.2s ease;"></div>
+    </div>
+  </div>
 
   <h2 style="font-size:13px; margin: 16px 0 10px;">Changelog</h2>
   <ul class="changelog-list">
@@ -1225,6 +1249,25 @@
     if (backfilled) saveTemplates();
   }
 
+  function updateStorageGauge() {
+    try {
+      const templatesRaw = Office.context.roamingSettings.get(STORAGE_KEY) || "";
+      const directoryRaw = Office.context.roamingSettings.get(DIRECTORY_KEY) || "";
+      const bytes = new TextEncoder().encode(templatesRaw + directoryRaw).length;
+      const limit = 32000; // Microsoft's documented RoamingSettings ceiling is 32 KB total
+      const pct = Math.min(100, (bytes / limit) * 100);
+
+      const bar = document.getElementById("storageGaugeBar");
+      const text = document.getElementById("storageGaugeText");
+      if (!bar || !text) return; // Help tab not rendered yet
+      bar.style.width = pct + "%";
+      bar.style.background = pct >= 80 ? "var(--danger)" : "var(--accent)";
+      text.textContent = `${(bytes / 1000).toFixed(1)} / 32 KB`;
+    } catch (e) {
+      // Non-critical — the gauge just stays at its last known value.
+    }
+  }
+
   function saveTemplates() {
     // Splits attachments (local storage, per device) from the rest (synced via Exchange).
     const attachStore = {};
@@ -1242,6 +1285,7 @@
       Office.context.roamingSettings.saveAsync((res) => {
         if (res.status === Office.AsyncResultStatus.Succeeded) {
           setSyncStatus("synced");
+          updateStorageGauge();
         } else {
           const isSizeLimit = res.error && res.error.code === 9057;
           setSyncStatus("error");
@@ -1251,6 +1295,7 @@
               : "Save error: " + (res.error ? res.error.message : "unknown"),
             true
           );
+          updateStorageGauge();
         }
       });
     } catch (e) {
@@ -1845,6 +1890,24 @@
   function updateCodeHint() {
     const type = document.getElementById("codeType").value;
     document.getElementById("codeHint").textContent = CODE_TYPE_HINTS[type] || "";
+    document.getElementById("loginCodeHelper").style.display = type === "datamatrix" ? "block" : "none";
+  }
+
+  // Appends a properly formatted "\tLOGIN\tPASSWORD\t\t\r\n" line to the value textarea —
+  // the scanner "keyboard wedge" format some login systems expect from a Data Matrix badge.
+  function addLoginCodeLine() {
+    const user = document.getElementById("loginCodeUser").value.trim();
+    const pass = document.getElementById("loginCodePass").value.trim();
+    if (!user || !pass) { setStatus("Enter both a login and a password.", true); return; }
+
+    const line = `\\t${user}\\t${pass}\\t\\t\\r\\n`;
+    const field = document.getElementById("codeValue");
+    field.value = field.value ? field.value.replace(/\n?$/, "\n" + line) : line;
+
+    document.getElementById("loginCodeUser").value = "";
+    document.getElementById("loginCodePass").value = "";
+    document.getElementById("loginCodeUser").focus();
+    setStatus(`Added a login code line for "${user}".`);
   }
 
   // Renders one value to an offscreen canvas and returns it, or null on failure
@@ -1866,10 +1929,18 @@
     }
   }
 
+  // Lets people type the literal two-character sequences \t, \r, \n (as used by barcode
+  // scanner "keyboard wedge" formats, e.g. login forms) instead of real Tab/Enter keypresses,
+  // which the textarea already uses for cursor movement / new batch lines.
+  function unescapeControlChars(str) {
+    return str.replace(/\\t/g, "\t").replace(/\\r/g, "\r").replace(/\\n/g, "\n");
+  }
+
   function generateCode() {
     const type = document.getElementById("codeType").value;
-    const values = document.getElementById("codeValue").value
+    const rawLines = document.getElementById("codeValue").value
       .split("\n").map((v) => v.trim()).filter(Boolean);
+    const values = rawLines.map(unescapeControlChars);
     const resultsList = document.getElementById("codeResultsList");
     const downloadAllBtn = document.getElementById("btnDownloadAllCodes");
     resultsList.innerHTML = "";
@@ -1882,7 +1953,8 @@
     }
 
     let successCount = 0;
-    values.forEach((value) => {
+    values.forEach((value, i) => {
+      const rawValue = rawLines[i]; // keeps \t/\r/\n readable in the download filename and history
       const canvas = renderOneCode(type, value);
       if (!canvas) return;
       successCount++;
@@ -1896,7 +1968,7 @@
       dlBtn.className = "ghost";
       dlBtn.textContent = "Download PNG";
       dlBtn.style.cssText = "display:inline-block; margin:6px 4px 0;";
-      dlBtn.addEventListener("click", () => downloadCanvasAsPng(canvas, type, value));
+      dlBtn.addEventListener("click", () => downloadCanvasAsPng(canvas, type, rawValue));
       row.appendChild(dlBtn);
 
       const printBtn = document.createElement("button");
@@ -1907,7 +1979,7 @@
       row.appendChild(printBtn);
 
       resultsList.appendChild(row);
-      addToCodeHistory(type, value);
+      addToCodeHistory(type, rawValue);
     });
 
     if (successCount > 1) downloadAllBtn.style.display = "block";
@@ -2515,6 +2587,7 @@
           el.textContent = "· Sync error";
           el.classList.add("error");
         }
+        updateStorageGauge();
       });
     } catch (e) {
       setStatus("Directory save error: " + e.message, true);
@@ -2783,6 +2856,7 @@
 
     loadDirectory();
     renderDirectory();
+    updateStorageGauge();
 
     // View switching — restores whichever section was open last time
     function switchView(selected) {
@@ -3066,6 +3140,7 @@
     updateCodeHint();
     document.getElementById("codeType").addEventListener("change", updateCodeHint);
     document.getElementById("btnGenerateCode").addEventListener("click", generateCode);
+    document.getElementById("btnAddLoginCode").addEventListener("click", addLoginCodeLine);
     document.getElementById("btnDownloadAllCodes").addEventListener("click", downloadAllCodesAsZip);
     renderCodeHistory();
 
@@ -3149,6 +3224,27 @@
     });
     document.getElementById("btnCopyDecoded").addEventListener("click", () => {
       copyToClipboard(document.getElementById("decodeValue").textContent, "Decoded value");
+    });
+
+    // Drag & drop onto the decode zone (click still opens the normal file picker)
+    const decodeDropZone = document.getElementById("decodeDropZone");
+    decodeDropZone.addEventListener("click", () => document.getElementById("decodeFileInput").click());
+    ["dragenter", "dragover"].forEach((evt) => {
+      decodeDropZone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        decodeDropZone.classList.add("drag-over");
+      });
+    });
+    ["dragleave", "drop"].forEach((evt) => {
+      decodeDropZone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        decodeDropZone.classList.remove("drag-over");
+      });
+    });
+    decodeDropZone.addEventListener("drop", (e) => {
+      const file = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (file && file.type.startsWith("image/")) decodeCodeImage(file);
+      else if (file) setStatus("That file isn't an image.", true);
     });
   });
 </script>
