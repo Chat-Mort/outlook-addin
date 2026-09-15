@@ -839,8 +839,11 @@
     <label for="dService">Service / department — optional</label>
     <input id="dService" type="text" placeholder="E.g. ADV, Quality, Maintenance" />
 
-    <label for="dPhone">Phone — optional</label>
-    <input id="dPhone" type="text" placeholder="E.g. ext. 4521" />
+    <label for="dPhone">Internal extension — optional</label>
+    <input id="dPhone" type="text" placeholder="E.g. 4521" />
+
+    <label for="dPersonalPhone">Personal phone — optional</label>
+    <input id="dPersonalPhone" type="text" placeholder="E.g. 06 12 34 56 78" />
 
     <label for="dEmail">Email — optional</label>
     <input id="dEmail" type="text" placeholder="E.g. m.dupont@company.com" />
@@ -2058,6 +2061,14 @@
     history = history.slice(0, 5);
     localStorage.setItem(CODE_HISTORY_KEY, JSON.stringify(history));
   }
+  // Recognizes the login-code helper's exact pattern (\tUSER\tPASS\t\t\r\n) so the history
+  // can show a friendly label instead of the raw escaped text.
+  function describeCodeValue(value) {
+    const loginMatch = value.match(/^\\t(.+?)\\t.+\\t\\t\\r\\n$/);
+    if (loginMatch) return { label: loginMatch[1], tag: "login badge" };
+    return { label: value, tag: null };
+  }
+
   function renderCodeHistory() {
     const box = document.getElementById("codeHistoryBox");
     const history = loadCodeHistory();
@@ -2065,10 +2076,12 @@
 
     box.innerHTML = `<p style="font-size:11px; color: var(--ink-soft); margin: 0 0 6px; text-transform:uppercase; letter-spacing:0.4px;">Recent</p>`;
     history.forEach((h) => {
+      const { label, tag } = describeCodeValue(h.value);
       const row = document.createElement("div");
       row.className = "reminder-file-row";
       row.style.cursor = "pointer";
-      row.innerHTML = `<span>${h.value}</span><span style="flex:0 0 auto; font-size:10.5px; color:var(--ink-soft);">${h.type}</span>`;
+      row.title = tag ? h.value.replace(/\\r\\n/, "").replace(/\\t/g, " · ") : "";
+      row.innerHTML = `<span>${label}</span><span style="flex:0 0 auto; font-size:10.5px; color:var(--ink-soft);">${tag || h.type}</span>`;
       row.addEventListener("click", () => {
         document.getElementById("codeType").value = h.type;
         document.getElementById("codeValue").value = h.value;
@@ -2677,7 +2690,7 @@
     if (dirSearch) {
       const q = dirSearch.toLowerCase();
       visible = visible.filter((c) =>
-        c.name.toLowerCase().includes(q) || (c.service || "").toLowerCase().includes(q)
+        c.name.toLowerCase().includes(q) || (c.service || "").toLowerCase().includes(q) || (c.phone || "").includes(q) || (c.personalPhone || "").includes(q)
       );
     }
 
@@ -2728,19 +2741,27 @@
         card.innerHTML = `
           <div class="template-top">
             <p class="template-name"></p>
-            ${c.phone ? '<button class="template-icon-btn btn-copy-phone" title="Copy phone number">📋</button>' : ""}
+            ${c.phone ? '<button class="template-icon-btn btn-copy-phone" title="Copy internal extension">📋</button>' : ""}
+            ${c.personalPhone ? '<button class="template-icon-btn btn-copy-personal" title="Copy personal phone">📱</button>' : ""}
             <button class="template-icon-btn btn-edit" title="Edit">✎</button>
             <button class="template-icon-btn danger btn-delete" title="Delete">🗑</button>
           </div>
           <p class="template-preview"></p>
         `;
         card.querySelector(".template-name").textContent = c.name;
-        const details = [c.role, c.phone, c.email].filter(Boolean).join(" · ");
+        const phoneParts = [];
+        if (c.phone) phoneParts.push(`ext. ${c.phone}`);
+        if (c.personalPhone) phoneParts.push(c.personalPhone);
+        const details = [c.role, phoneParts.join(" / "), c.email].filter(Boolean).join(" · ");
         card.querySelector(".template-preview").textContent = details;
 
         const copyBtn = card.querySelector(".btn-copy-phone");
         if (copyBtn) {
-          copyBtn.addEventListener("click", () => copyToClipboard(c.phone, `Phone number for ${c.name}`));
+          copyBtn.addEventListener("click", () => copyToClipboard(c.phone, `Extension for ${c.name}`));
+        }
+        const copyPersonalBtn = card.querySelector(".btn-copy-personal");
+        if (copyPersonalBtn) {
+          copyPersonalBtn.addEventListener("click", () => copyToClipboard(c.personalPhone, `Personal phone for ${c.name}`));
         }
         card.querySelector(".btn-edit").addEventListener("click", () => openDirForm(c));
         card.querySelector(".btn-delete").addEventListener("click", () => deleteDirectoryEntry(c.id));
@@ -2766,6 +2787,7 @@
     document.getElementById("dRole").value = c ? (c.role || "") : "";
     document.getElementById("dService").value = c ? (c.service || "") : "";
     document.getElementById("dPhone").value = c ? (c.phone || "") : "";
+    document.getElementById("dPersonalPhone").value = c ? (c.personalPhone || "") : "";
     document.getElementById("dEmail").value = c ? (c.email || "") : "";
     document.getElementById("dirForm").classList.remove("hidden");
     document.getElementById("dName").focus();
@@ -2785,6 +2807,7 @@
       role: document.getElementById("dRole").value.trim(),
       service: document.getElementById("dService").value.trim(),
       phone: document.getElementById("dPhone").value.trim(),
+      personalPhone: document.getElementById("dPersonalPhone").value.trim(),
       email: document.getElementById("dEmail").value.trim()
     };
     if (dirEditingId) {
@@ -2829,6 +2852,7 @@
             role: raw.role || "",
             service: raw.service || "",
             phone: raw.phone || "",
+            personalPhone: raw.personalPhone || "",
             email: raw.email || ""
           });
           added++;
@@ -3086,7 +3110,7 @@
       let matches = directory.slice().sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
       if (query) {
         const q = query.toLowerCase();
-        matches = matches.filter((c) => c.name.toLowerCase().includes(q) || (c.service || "").toLowerCase().includes(q));
+        matches = matches.filter((c) => c.name.toLowerCase().includes(q) || (c.service || "").toLowerCase().includes(q) || (c.phone || "").includes(q) || (c.personalPhone || "").includes(q));
       }
       if (matches.length === 0) {
         box.innerHTML = `<div style="font-size:11.5px; color: var(--ink-soft); padding: 6px 4px;">No contacts found.</div>`;
@@ -3156,7 +3180,7 @@
         t.name.toLowerCase().includes(q) || (t.subject || "").toLowerCase().includes(q)
       ).slice(0, 8);
       const matchedContacts = directory.filter((c) =>
-        c.name.toLowerCase().includes(q) || (c.service || "").toLowerCase().includes(q)
+        c.name.toLowerCase().includes(q) || (c.service || "").toLowerCase().includes(q) || (c.phone || "").includes(q) || (c.personalPhone || "").includes(q)
       ).slice(0, 8);
 
       if (matchedTemplates.length === 0 && matchedContacts.length === 0) {
