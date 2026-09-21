@@ -964,10 +964,16 @@
   </p>
 
   <h2 style="font-size:13px; margin: 16px 0 10px;">Storage</h2>
+  <div id="exportReminderBox" class="hidden" style="background: var(--accent-soft); color: var(--accent); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; font-size: 11.5px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+    <span id="exportReminderText"></span>
+    <button class="primary" id="btnExportReminderNow" style="padding:4px 8px; font-size:11px; flex:0 0 auto;">Export now</button>
+  </div>
   <p class="help-text">
-    Template text and the directory are synced to your mailbox (RoamingSettings — works across
-    devices signed into the same account). Attachments and code history stay local to this
-    browser/device only. Use Export/Import (⬇/⬆) for a manual backup of either.
+    Template text is synced to your mailbox (RoamingSettings — works across devices signed
+    into the same account). The directory, attachments, and code history stay local to this
+    browser/device only (the directory was moved off synced storage after a sync failure
+    risked corrupting it alongside templates — see the Changelog). Use Export/Import (⬇/⬆)
+    for a manual backup of either.
   </p>
   <div style="margin: 8px 0 4px;">
     <div style="display:flex; justify-content:space-between; font-size:11px; color: var(--ink-soft); margin-bottom:3px;">
@@ -981,6 +987,7 @@
 
   <h2 style="font-size:13px; margin: 16px 0 10px;">Changelog</h2>
   <ul class="changelog-list">
+    <li>Directory moved to local-only storage (isolated from templates' synced storage) after a sync failure risked losing it; added a local backup check on load that offers to restore templates if the synced copy looks incomplete, and a periodic export reminder.</li>
     <li>Insert a directory contact directly into a mail via the ⚡ menu, and copy any phone number to the clipboard with one click.</li>
     <li>Preview button (👁) on each template card — see the resolved subject/body before actually inserting.</li>
     <li>Attachment names shown on hover over the 📎 badge.</li>
@@ -1082,6 +1089,8 @@
   const DIRECTORY_KEY = "modeles_pro_directory_v1";
   const LAST_VIEW_KEY = "modeles_pro_last_view_v1";
   const CODE_HISTORY_KEY = "modeles_pro_code_history_v1";
+  const TEMPLATES_MIRROR_KEY = "modeles_pro_templates_mirror_v1";
+  const LAST_EXPORT_KEY = "modeles_pro_last_export_v1";
   let templates = [];
   let editingId = null;
   let formAttachments = [];
@@ -1246,6 +1255,21 @@
       templates = [];
     }
 
+    // Safety check: compare against the local mirror saved after the last successful sync.
+    // If the synced copy looks thinner than what we know was saved before, the sync likely
+    // failed silently — offer to restore from the mirror instead of quietly accepting data loss.
+    try {
+      const mirrorRaw = localStorage.getItem(TEMPLATES_MIRROR_KEY);
+      if (mirrorRaw) {
+        const mirrorTemplates = JSON.parse(mirrorRaw);
+        if (Array.isArray(mirrorTemplates) && mirrorTemplates.length > templates.length) {
+          offerTemplatesMirrorRestore(mirrorTemplates, templates.length);
+        }
+      }
+    } catch (e) {
+      // Non-critical — worst case, no restore offer this time.
+    }
+
     // Attachments stay local (too large for RoamingSettings' 32 KB limit); reattached here
     // to the matching templates for display/insertion.
     const attachStore = loadAttachmentStore();
@@ -1269,11 +1293,27 @@
     if (backfilled) saveTemplates();
   }
 
+  // Shows a persistent (not auto-clearing) warning with a one-click restore when the synced
+  // copy looks thinner than the last known-good local mirror.
+  function offerTemplatesMirrorRestore(mirrorTemplates, currentCount) {
+    const el = document.getElementById("status");
+    el.className = "error";
+    el.innerHTML = `⚠ Synced templates look incomplete (${currentCount} found, ${mirrorTemplates.length} expected — possible sync failure). <button type="button" id="restoreMirrorBtn" style="border:none; background:none; color:var(--accent); text-decoration:underline; cursor:pointer; font-size:12px; padding:0;">Restore from local backup</button>`;
+    document.getElementById("restoreMirrorBtn").addEventListener("click", () => {
+      templates = mirrorTemplates;
+      renderList();
+      saveTemplates();
+      setStatus(`Restored ${mirrorTemplates.length} template(s) from local backup.`);
+    });
+    // Deliberately does NOT auto-clear like normal status messages — this needs to be seen.
+  }
+
   function updateStorageGauge() {
     try {
+      // Directory moved to local-only storage, so this now only reflects templates —
+      // the actual contents of the synced RoamingSettings budget.
       const templatesRaw = Office.context.roamingSettings.get(STORAGE_KEY) || "";
-      const directoryRaw = Office.context.roamingSettings.get(DIRECTORY_KEY) || "";
-      const bytes = new TextEncoder().encode(templatesRaw + directoryRaw).length;
+      const bytes = new TextEncoder().encode(templatesRaw).length;
       const limit = 32000; // Microsoft's documented RoamingSettings ceiling is 32 KB total
       const pct = Math.min(100, (bytes / limit) * 100);
 
@@ -1306,6 +1346,9 @@
         if (res.status === Office.AsyncResultStatus.Succeeded) {
           setSyncStatus("synced");
           updateStorageGauge();
+          // Keeps a local safety copy so a future load can tell if the synced copy came
+          // back stale/empty (a silent RoamingSettings failure) instead of trusting it blindly.
+          try { localStorage.setItem(TEMPLATES_MIRROR_KEY, JSON.stringify(coreTemplates)); } catch (e) {}
         } else {
           const isSizeLimit = res.error && res.error.code === 9057;
           setSyncStatus("error");
@@ -1381,6 +1424,38 @@
     const stamp = todayStr().replaceAll("/", "-");
     downloadTextFile(`swift-compose-backup-${stamp}.json`, JSON.stringify(payload, null, 2));
     setStatus(`Exported ${templates.length} template(s).`);
+    markExported();
+  }
+
+  function markExported() {
+    localStorage.setItem(LAST_EXPORT_KEY, Date.now().toString());
+    hideExportReminder();
+  }
+
+  function hideExportReminder() {
+    const box = document.getElementById("exportReminderBox");
+    if (box) box.classList.add("hidden");
+  }
+
+  // Gentle, non-blocking nudge if it's been a while since the last successful export of
+  // either templates or the directory — the only real backup now that data loss has
+  // actually happened once.
+  function checkExportReminder() {
+    const EXPORT_REMINDER_DAYS = 7;
+    const lastExport = parseInt(localStorage.getItem(LAST_EXPORT_KEY) || "0", 10);
+    const daysSince = (Date.now() - lastExport) / (1000 * 60 * 60 * 24);
+    const box = document.getElementById("exportReminderBox");
+    if (!box) return;
+
+    if (!lastExport) {
+      document.getElementById("exportReminderText").textContent = "No backup exported yet — worth doing once, especially after building up templates or contacts.";
+      box.classList.remove("hidden");
+    } else if (daysSince > EXPORT_REMINDER_DAYS) {
+      document.getElementById("exportReminderText").textContent = `Last backup was ${Math.floor(daysSince)} day(s) ago.`;
+      box.classList.remove("hidden");
+    } else {
+      box.classList.add("hidden");
+    }
   }
 
   // Imports templates from a previously exported JSON file. Always MERGES — never overwrites
@@ -2633,32 +2708,42 @@
 
   // ===== Directory (contacts) =====
 
+  // Directory now lives in localStorage only — deliberately isolated from RoamingSettings,
+  // so a templates sync failure can never again drag the directory down with it.
   function loadDirectory() {
     try {
-      const raw = Office.context.roamingSettings.get(DIRECTORY_KEY);
-      directory = raw ? JSON.parse(raw) : [];
+      const raw = localStorage.getItem(DIRECTORY_KEY);
+      if (raw) {
+        directory = JSON.parse(raw);
+        return;
+      }
+    } catch (e) {
+      directory = [];
+    }
+    // One-time recovery: if nothing local yet, pull in whatever is still sitting in
+    // RoamingSettings from before this change (could be stale, but better than nothing).
+    try {
+      const roamingRaw = Office.context.roamingSettings.get(DIRECTORY_KEY);
+      directory = roamingRaw ? JSON.parse(roamingRaw) : [];
+      if (directory.length > 0) {
+        localStorage.setItem(DIRECTORY_KEY, JSON.stringify(directory));
+        setStatus(`Recovered ${directory.length} contact(s) from the old synced storage.`);
+      }
     } catch (e) {
       directory = [];
     }
   }
 
   function saveDirectory() {
+    const el = document.getElementById("directorySyncStatus");
     try {
-      Office.context.roamingSettings.set(DIRECTORY_KEY, JSON.stringify(directory));
-      const el = document.getElementById("directorySyncStatus");
-      el.textContent = "· Saving…";
+      localStorage.setItem(DIRECTORY_KEY, JSON.stringify(directory));
+      el.textContent = "· Saved locally";
       el.classList.remove("error");
-      Office.context.roamingSettings.saveAsync((res) => {
-        if (res.status === Office.AsyncResultStatus.Succeeded) {
-          el.textContent = "· Synced";
-          setTimeout(() => { el.textContent = ""; }, 4000);
-        } else {
-          el.textContent = "· Sync error";
-          el.classList.add("error");
-        }
-        updateStorageGauge();
-      });
+      setTimeout(() => { el.textContent = ""; }, 4000);
     } catch (e) {
+      el.textContent = "· Save error";
+      el.classList.add("error");
       setStatus("Directory save error: " + e.message, true);
     }
   }
@@ -2890,6 +2975,7 @@
     const date = new Date().toISOString().slice(0, 10);
     downloadTextFile(`swift-compose-directory-${date}.json`, JSON.stringify(payload, null, 2));
     setStatus(`Exported ${directory.length} contact(s).`);
+    markExported();
   }
 
   function importDirectoryFromFile(file) {
@@ -2937,6 +3023,11 @@
     loadDirectory();
     renderDirectory();
     updateStorageGauge();
+    checkExportReminder();
+    document.getElementById("btnExportReminderNow").addEventListener("click", () => {
+      exportTemplates();
+      if (directory.length > 0) exportDirectory();
+    });
 
     // View switching — restores whichever section was open last time
     function switchView(selected) {
