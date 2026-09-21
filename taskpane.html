@@ -743,6 +743,10 @@
         <span>Delivery note</span>
         <span class="tag-menu-help" title="Inserts {{dn}} — asks for a delivery note number every time this template is used, formatted as DNXXXXXXXX.">?</span>
       </div>
+      <div class="tag-menu-item" id="tagItemAttach">
+        <span>Attachment request</span>
+        <span class="tag-menu-help" title="Inserts {{attach}} (or {{attach:Label}}) — reminds whoever uses this template to attach a file, with the download/import flow, but without any file pre-stored in the template.">?</span>
+      </div>
       <div class="tag-menu-item" id="tagItemShortcuts">
         <span>Shortcuts</span>
         <span class="tag-menu-help" title="Pastes an existing ##shortcut at the cursor, so you don't have to remember its exact spelling.">?</span>
@@ -794,6 +798,18 @@
       <div class="tag-menu-preview" id="weekPreview">This week — W1</div>
       <div class="tag-menu-actions">
         <button class="primary" id="weekInsert" style="padding:5px 8px; font-size:12px;">Insert</button>
+      </div>
+    </div>
+
+    <!-- "Attachment request" detail view -->
+    <div id="tagMenuAttach" class="hidden">
+      <div class="tag-menu-back" id="attachBack">‹ Back</div>
+      <div class="tag-menu-row">
+        <label for="attachLabel">Label — optional</label>
+        <input type="text" id="attachLabel" placeholder="E.g. Packing list" />
+      </div>
+      <div class="tag-menu-actions">
+        <button class="primary" id="attachInsert" style="padding:5px 8px; font-size:12px;">Insert</button>
       </div>
     </div>
 
@@ -912,6 +928,7 @@
     <tr><td><code>{{w+N}}</code> / <code>{{w-N}}</code></td><td>N weeks ahead/back</td></tr>
     <tr><td><code>{{c}}</code></td><td>Asks for a specific date at insertion time (calendar picker)</td></tr>
     <tr><td><code>{{dn}}</code></td><td>Asks for a delivery note number, inserted as DNXXXXXXXX</td></tr>
+    <tr><td><code>{{attach}}</code> / <code>{{attach:Label}}</code></td><td>Requests a file be attached (download/import reminder), no pre-stored file needed</td></tr>
   </table>
 
   <h2 style="font-size:13px; margin: 16px 0 10px;">Body formatting</h2>
@@ -2135,6 +2152,14 @@
       .replaceAll("{{c}}", "[date to be chosen]")
       .replaceAll("{{dn}}", "DN[number to be entered]");
 
+    // {{attach}} tags don't show up in the actual email either — strip them here too,
+    // but collect their labels to list alongside the stored attachments below.
+    const subjectAttachPreview = extractAttachmentRequests(subjectRaw);
+    const bodyAttachPreview = extractAttachmentRequests(bodyRaw);
+    subjectRaw = subjectAttachPreview.text;
+    bodyRaw = bodyAttachPreview.text;
+    const requestedAttachments = [...subjectAttachPreview.requests, ...bodyAttachPreview.requests];
+
     const subject = applyPlaceholders(subjectRaw);
     const bodyHtml = markdownishToHtml(applyPlaceholders(bodyRaw));
 
@@ -2142,9 +2167,9 @@
     document.getElementById("previewSubject").textContent = subject || "(empty)";
     document.getElementById("previewBody").innerHTML = bodyHtml || "(empty)";
 
-    const attachments = t.attachments || [];
+    const attachments = [...(t.attachments || []), ...requestedAttachments];
     document.getElementById("previewAttachments").textContent = attachments.length > 0
-      ? `📎 ${attachments.map((a) => `${a.name}${a.final ? " (final)" : " (blank)"}`).join(", ")}`
+      ? `📎 ${attachments.map((a) => a.base64 ? `${a.name}${a.final ? " (final)" : " (blank)"}` : `${a.name} (requested — no file stored)`).join(", ")}`
       : "";
 
     document.getElementById("previewModalOverlay").classList.remove("hidden");
@@ -2178,12 +2203,20 @@
       bodyRaw = bodyRaw.replaceAll("{{dn}}", dn);
     }
 
+    // {{attach}} / {{attach:Label}}: flags a file that needs attaching, without a pre-stored
+    // blank version. The tag itself never appears in the actual email.
+    const subjectAttachResult = extractAttachmentRequests(subjectRaw);
+    const bodyAttachResult = extractAttachmentRequests(bodyRaw);
+    subjectRaw = subjectAttachResult.text;
+    bodyRaw = bodyAttachResult.text;
+    const requestedAttachments = [...subjectAttachResult.requests, ...bodyAttachResult.requests];
+
     const subject = applyPlaceholders(subjectRaw);
     const bodyHtml = markdownishToHtml(applyPlaceholders(bodyRaw));
     const toList = parseRecipients(t.to);
     const ccList = parseRecipients(t.cc);
     const bccList = parseRecipients(t.bcc);
-    const attachments = t.attachments || [];
+    const attachments = [...(t.attachments || []), ...requestedAttachments];
 
     // Marks this template as just used, for the "Recently used" sort option.
     t.lastUsedAt = Date.now();
@@ -2245,20 +2278,22 @@
     const list = document.getElementById("attachmentReminderList");
     const note = document.getElementById("attachmentReminderNote");
     note.textContent = canAttach
-      ? "These are blank placeholders. Download for reference, or import your final version to attach it directly."
-      : "This new email was created in a separate window, so nothing can be attached automatically. Download the blank file for reference, then attach your final version yourself.";
+      ? "Download a blank placeholder for reference, or import the real file to attach it directly."
+      : "This new email was created in a separate window, so nothing can be attached automatically. Download any blank placeholder for reference, then attach the real file(s) yourself.";
     list.innerHTML = "";
 
     attachments.forEach((a) => {
+      const hasBlankFile = !!a.base64;
       const row = document.createElement("div");
       row.className = "reminder-file-row";
       row.innerHTML = `
         <span></span>
-        <button type="button" class="btn-download">Download blank</button>
-        ${canAttach ? `<button type="button" class="btn-import">Import final</button><input type="file" class="hidden-file-input hidden" />` : ""}
+        ${hasBlankFile ? '<button type="button" class="btn-download">Download blank</button>' : ""}
+        ${canAttach ? `<button type="button" class="btn-import">Import${hasBlankFile ? " final" : ""}</button><input type="file" class="hidden-file-input hidden" />` : ""}
       `;
       row.querySelector("span").textContent = a.name;
-      row.querySelector(".btn-download").addEventListener("click", () => downloadBase64File(a.name, a.base64));
+      const downloadBtn = row.querySelector(".btn-download");
+      if (downloadBtn) downloadBtn.addEventListener("click", () => downloadBase64File(a.name, a.base64));
 
       if (canAttach) {
         const importBtn = row.querySelector(".btn-import");
@@ -2277,13 +2312,13 @@
               importBtn.textContent = `✓ Attached: ${file.name}`;
             } catch (err) {
               importBtn.disabled = false;
-              importBtn.textContent = "Import final";
+              importBtn.textContent = hasBlankFile ? "Import final" : "Import";
               setStatus(`Couldn't attach "${file.name}": ${err ? err.message : "unknown error"}`, true);
             }
           };
           reader.onerror = () => {
             importBtn.disabled = false;
-            importBtn.textContent = "Import final";
+            importBtn.textContent = hasBlankFile ? "Import final" : "Import";
             setStatus(`Couldn't read "${file.name}".`, true);
           };
           reader.readAsDataURL(file);
@@ -2425,6 +2460,18 @@
   // behavior as inserting a template directly.
   // Recursively finds every ##shortcut in text and collects the attachments of the
   // templates they reference (deduplicated, in case the same shortcut is used twice).
+  // {{attach}} or {{attach:Label}}: asks for a file to be attached, without any pre-stored
+  // blank version. Returns the requested items and the text with the tags stripped out —
+  // the tag itself should never show up in the actual email.
+  function extractAttachmentRequests(text) {
+    const requests = [];
+    const stripped = text.replace(/\{\{attach(?::([^}]*))?\}\}/g, (match, label) => {
+      requests.push({ name: (label || "").trim() || "Attachment", base64: null });
+      return "";
+    });
+    return { text: stripped, requests };
+  }
+
   function collectShortcutAttachments(text, maxDepth, seenIds) {
     if (maxDepth === undefined) maxDepth = 5;
     if (seenIds === undefined) seenIds = new Set();
@@ -2522,6 +2569,15 @@
         bodyRaw = bodyRaw.replaceAll("{{dn}}", dn);
       }
 
+      // {{attach}} / {{attach:Label}}: flags a file that needs attaching. Always compose
+      // mode here (this only ever runs on an already-open draft), so it can go straight
+      // into the same "blank" reminder flow as the referenced templates' attachments.
+      const subjectAttachResult = extractAttachmentRequests(subjectRaw);
+      const bodyAttachResult = extractAttachmentRequests(bodyRaw);
+      subjectRaw = subjectAttachResult.text;
+      bodyRaw = bodyAttachResult.text;
+      const requestedAttachments = [...subjectAttachResult.requests, ...bodyAttachResult.requests];
+
       const updatedSubject = applyPlaceholders(subjectRaw);
       const updatedBody = applyPlaceholders(bodyRaw);
 
@@ -2541,7 +2597,7 @@
       });
       const allAttachments = collectShortcutAttachments(originalSubject + "\n" + originalBody);
       const finalAttachments = allAttachments.filter((a) => a.final);
-      const blankAttachments = allAttachments.filter((a) => !a.final);
+      const blankAttachments = [...allAttachments.filter((a) => !a.final), ...requestedAttachments];
       for (const a of finalAttachments) await attachOne(a);
       if (blankAttachments.length > 0) {
         showAttachmentReminder(blankAttachments, { canAttach: true, onAttach: (fileName, base64) => attachOne({ name: fileName, base64 }) });
@@ -2958,6 +3014,7 @@
     const tagMenuWeek = document.getElementById("tagMenuWeek");
     const tagMenuShortcuts = document.getElementById("tagMenuShortcuts");
     const tagMenuContact = document.getElementById("tagMenuContact");
+    const tagMenuAttach = document.getElementById("tagMenuAttach");
     let tagMenuTargetId = "fBody";
 
     function closeTagMenu() {
@@ -2966,6 +3023,7 @@
       tagMenuWeek.classList.add("hidden");
       tagMenuShortcuts.classList.add("hidden");
       tagMenuContact.classList.add("hidden");
+      tagMenuAttach.classList.add("hidden");
       tagMenuList.classList.remove("hidden");
     }
 
@@ -2977,6 +3035,7 @@
         tagMenuWeek.classList.add("hidden");
         tagMenuShortcuts.classList.add("hidden");
         tagMenuContact.classList.add("hidden");
+        tagMenuAttach.classList.add("hidden");
         tagMenuList.classList.remove("hidden");
         tagMenu.classList.remove("hidden");
         // Positions the menu right under the clicked button
@@ -3076,6 +3135,24 @@
     // "Delivery note" item: inserts {{dn}} directly, no sub-view
     document.getElementById("tagItemDN").addEventListener("click", () => {
       insertAtCursor(document.getElementById(tagMenuTargetId), "{{dn}}");
+      closeTagMenu();
+    });
+
+    // "Attachment request" item: opens a sub-view to optionally name what's needed
+    document.getElementById("tagItemAttach").addEventListener("click", () => {
+      document.getElementById("attachLabel").value = "";
+      tagMenuList.classList.add("hidden");
+      tagMenuAttach.classList.remove("hidden");
+      document.getElementById("attachLabel").focus();
+    });
+    document.getElementById("attachBack").addEventListener("click", () => {
+      tagMenuAttach.classList.add("hidden");
+      tagMenuList.classList.remove("hidden");
+    });
+    document.getElementById("attachInsert").addEventListener("click", () => {
+      const label = document.getElementById("attachLabel").value.trim();
+      const tag = label ? `{{attach:${label}}}` : "{{attach}}";
+      insertAtCursor(document.getElementById(tagMenuTargetId), tag);
       closeTagMenu();
     });
 
