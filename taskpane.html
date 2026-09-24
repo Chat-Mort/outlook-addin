@@ -615,6 +615,7 @@
     <select id="viewSelect" style="flex:1 1 auto;">
       <option value="viewTemplates">Templates</option>
       <option value="viewDirectory">Directory</option>
+      <option value="viewClients">Clients</option>
       <option value="viewCodes">Codes</option>
       <option value="viewHelp">Help</option>
     </select>
@@ -747,6 +748,14 @@
         <span>Attachment request</span>
         <span class="tag-menu-help" title="Inserts {{attach}} (or {{attach:Label}}) — reminds whoever uses this template to attach a file, with the download/import flow, but without any file pre-stored in the template.">?</span>
       </div>
+      <div class="tag-menu-item" id="tagItemClient">
+        <span>Client</span>
+        <span class="tag-menu-help" title="Inserts {{client}} — asks you to pick a client from the Clients list every time this template is used, and inserts that client's saved address.">?</span>
+      </div>
+      <div class="tag-menu-item" id="tagItemQuestion">
+        <span>Question</span>
+        <span class="tag-menu-help" title="Inserts {{q:Your question}} — asks a custom question every time this template is used, and inserts the typed answer.">?</span>
+      </div>
       <div class="tag-menu-item" id="tagItemShortcuts">
         <span>Shortcuts</span>
         <span class="tag-menu-help" title="Pastes an existing ##shortcut at the cursor, so you don't have to remember its exact spelling.">?</span>
@@ -813,6 +822,18 @@
       </div>
     </div>
 
+    <!-- "Question" detail view -->
+    <div id="tagMenuQuestion" class="hidden">
+      <div class="tag-menu-back" id="questionBack">‹ Back</div>
+      <div class="tag-menu-row">
+        <label for="questionLabel">Question to ask</label>
+        <input type="text" id="questionLabel" placeholder="E.g. PO number" />
+      </div>
+      <div class="tag-menu-actions">
+        <button class="primary" id="questionInsert" style="padding:5px 8px; font-size:12px;">Insert</button>
+      </div>
+    </div>
+
     <!-- "Shortcuts" detail view -->
     <div id="tagMenuShortcuts" class="hidden">
       <div class="tag-menu-back" id="shortcutsBack">‹ Back</div>
@@ -867,6 +888,36 @@
     <div class="form-actions">
       <button class="ghost" id="dirBtnCancel">Cancel</button>
       <button class="primary" id="dirBtnSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="viewClients" class="hidden">
+  <div class="list-head">
+    <h2>Clients <span id="clientsSyncStatus" class="sync-status"></span></h2>
+    <div style="display:flex; gap:6px;">
+      <button class="ghost" id="btnClientExport" title="Export all clients as a JSON backup file">⬇</button>
+      <button class="ghost" id="btnClientImport" title="Import clients from a JSON backup file">⬆</button>
+      <button class="primary" id="btnClientNew">+ New</button>
+    </div>
+  </div>
+  <input type="file" id="clientImportFileInput" accept="application/json" class="hidden" />
+
+  <input type="text" id="clientSearchInput" class="search-input" placeholder="Search clients…" />
+
+  <div id="clientList"></div>
+  <div id="clientEmptyState" class="empty hidden">No clients yet. Click "+ New" to add one.</div>
+
+  <div id="clientForm" class="form hidden">
+    <label for="cName">Client name</label>
+    <input id="cName" type="text" placeholder="E.g. Zaragoza plant" />
+
+    <label for="cAddress">Address</label>
+    <textarea id="cAddress" placeholder="Free text — whatever you'd normally paste into the mail" style="width:100%; min-height:70px; font-family: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; color: var(--ink); background: var(--card); resize: vertical;"></textarea>
+
+    <div class="form-actions">
+      <button class="ghost" id="clientBtnCancel">Cancel</button>
+      <button class="primary" id="clientBtnSave">Save</button>
     </div>
   </div>
 </div>
@@ -929,6 +980,8 @@
     <tr><td><code>{{c}}</code></td><td>Asks for a specific date at insertion time (calendar picker)</td></tr>
     <tr><td><code>{{dn}}</code></td><td>Asks for a delivery note number, inserted as DNXXXXXXXX</td></tr>
     <tr><td><code>{{attach}}</code> / <code>{{attach:Label}}</code></td><td>Requests a file be attached (download/import reminder), no pre-stored file needed</td></tr>
+    <tr><td><code>{{client}}</code></td><td>Asks you to pick a client from the Clients list, inserts their saved address</td></tr>
+    <tr><td><code>{{q:Question}}</code></td><td>Asks a custom question, inserts the typed answer (each occurrence asked separately)</td></tr>
   </table>
 
   <h2 style="font-size:13px; margin: 16px 0 10px;">Body formatting</h2>
@@ -1038,6 +1091,31 @@
   </div>
 </div>
 
+<!-- "Select a client" modal: opens when inserting a template that contains {{client}} -->
+<div id="clientModalOverlay" class="modal-overlay hidden">
+  <div class="modal-card" style="max-height: 70vh; display:flex; flex-direction:column;">
+    <h3>Select a client</h3>
+    <input type="text" id="clientModalSearch" placeholder="Search clients…" style="width:100%; font-family: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; color: var(--ink); background: var(--card); margin-bottom: 8px;" />
+    <div id="clientModalList" style="overflow-y:auto; flex:1 1 auto;"></div>
+    <div class="modal-actions">
+      <button class="ghost" id="clientModalCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- "Question" modal: opens for each {{q:Label}} found when inserting a template -->
+<div id="questionModalOverlay" class="modal-overlay hidden">
+  <div class="modal-card">
+    <h3 id="questionModalTitle">Question</h3>
+    <input type="text" id="questionModalInput" style="width:100%; font-family: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; color: var(--ink); background: var(--card);" />
+    <div class="modal-actions">
+      <button class="ghost" id="questionModalCancel">Cancel</button>
+      <button class="primary" id="questionModalConfirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+
 <!-- "Rename service" modal: renames a directory service label for every contact in that group -->
 <div id="renameServiceModalOverlay" class="modal-overlay hidden">
   <div class="modal-card">
@@ -1087,6 +1165,7 @@
   const ATTACH_STORAGE_KEY = "modeles_pro_attachments_v1";
   const SORT_KEY = "modeles_pro_sort_v1";
   const DIRECTORY_KEY = "modeles_pro_directory_v1";
+  const CLIENTS_KEY = "modeles_pro_clients_v1";
   const LAST_VIEW_KEY = "modeles_pro_last_view_v1";
   const CODE_HISTORY_KEY = "modeles_pro_code_history_v1";
   const TEMPLATES_MIRROR_KEY = "modeles_pro_templates_mirror_v1";
@@ -1102,6 +1181,7 @@
   let directory = [];
   let dirEditingId = null;
   let dirSearch = "";
+  let clients = [];
 
   function pad(n) { return String(n).padStart(2, "0"); }
 
@@ -2222,10 +2302,14 @@
   function showTemplatePreview(t) {
     let subjectRaw = resolveShortcuts(t.subject || "", undefined, false, "subject")
       .replaceAll("{{c}}", "[date to be chosen]")
-      .replaceAll("{{dn}}", "DN[number to be entered]");
+      .replaceAll("{{dn}}", "DN[number to be entered]")
+      .replaceAll("{{client}}", "[client address to be chosen]")
+      .replace(/\{\{q:([^}]*)\}\}/g, (m, label) => `[${(label || "Question").trim()}]`);
     let bodyRaw = resolveShortcuts(t.body || "", undefined, false, "body")
       .replaceAll("{{c}}", "[date to be chosen]")
-      .replaceAll("{{dn}}", "DN[number to be entered]");
+      .replaceAll("{{dn}}", "DN[number to be entered]")
+      .replaceAll("{{client}}", "[client address to be chosen]")
+      .replace(/\{\{q:([^}]*)\}\}/g, (m, label) => `[${(label || "Question").trim()}]`);
 
     // {{attach}} tags don't show up in the actual email either — strip them here too,
     // but collect their labels to list alongside the stored attachments below.
@@ -2277,6 +2361,25 @@
       subjectRaw = subjectRaw.replaceAll("{{dn}}", dn);
       bodyRaw = bodyRaw.replaceAll("{{dn}}", dn);
     }
+
+    // {{client}}: asks you to pick a client at insertion time, replaces every occurrence
+    // with that client's saved address, once.
+    if (subjectRaw.includes("{{client}}") || bodyRaw.includes("{{client}}")) {
+      const address = await promptForClientSelection();
+      if (address === null) {
+        setStatus("Insertion cancelled.");
+        return;
+      }
+      subjectRaw = subjectRaw.replaceAll("{{client}}", address);
+      bodyRaw = bodyRaw.replaceAll("{{client}}", address);
+    }
+
+    // {{q:Label}}: asks a custom question per occurrence (even identical labels get their
+    // own prompt, in case they need different answers).
+    subjectRaw = await resolveQuestionTagsInText(subjectRaw);
+    if (subjectRaw === null) { setStatus("Insertion cancelled."); return; }
+    bodyRaw = await resolveQuestionTagsInText(bodyRaw);
+    if (bodyRaw === null) { setStatus("Insertion cancelled."); return; }
 
     // {{attach}} / {{attach:Label}}: flags a file that needs attaching, without a pre-stored
     // blank version. The tag itself never appears in the actual email.
@@ -2644,6 +2747,21 @@
         bodyRaw = bodyRaw.replaceAll("{{dn}}", dn);
       }
 
+      if (subjectRaw.includes("{{client}}") || bodyRaw.includes("{{client}}")) {
+        const address = await promptForClientSelection();
+        if (address === null) {
+          setStatus("Cancelled.");
+          return;
+        }
+        subjectRaw = subjectRaw.replaceAll("{{client}}", address);
+        bodyRaw = bodyRaw.replaceAll("{{client}}", address);
+      }
+
+      subjectRaw = await resolveQuestionTagsInText(subjectRaw);
+      if (subjectRaw === null) { setStatus("Cancelled."); return; }
+      bodyRaw = await resolveQuestionTagsInText(bodyRaw);
+      if (bodyRaw === null) { setStatus("Cancelled."); return; }
+
       // {{attach}} / {{attach:Label}}: flags a file that needs attaching. Always compose
       // mode here (this only ever runs on an already-open draft), so it can go straight
       // into the same "blank" reminder flow as the referenced templates' attachments.
@@ -3010,6 +3128,243 @@
     reader.readAsText(file);
   }
 
+  // ===== Clients (name + free-text address, used by the {{client}} tag) =====
+  // Local storage only, same reasoning as the Directory: isolated from templates'
+  // synced RoamingSettings budget, so neither can ever drag the other down.
+
+  function loadClients() {
+    try {
+      const raw = localStorage.getItem(CLIENTS_KEY);
+      clients = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      clients = [];
+    }
+  }
+
+  function saveClients() {
+    const el = document.getElementById("clientsSyncStatus");
+    try {
+      localStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
+      if (el) {
+        el.textContent = "· Saved locally";
+        el.classList.remove("error");
+        setTimeout(() => { el.textContent = ""; }, 4000);
+      }
+    } catch (e) {
+      if (el) { el.textContent = "· Save error"; el.classList.add("error"); }
+      setStatus("Client save error: " + e.message, true);
+    }
+  }
+
+  let clientSearch = "";
+
+  function renderClients() {
+    const list = document.getElementById("clientList");
+    const empty = document.getElementById("clientEmptyState");
+    list.innerHTML = "";
+
+    let visible = clients.slice().sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
+    if (clientSearch) {
+      const q = clientSearch.toLowerCase();
+      visible = visible.filter((c) => c.name.toLowerCase().includes(q) || (c.address || "").toLowerCase().includes(q));
+    }
+
+    if (visible.length === 0) {
+      empty.textContent = clients.length === 0 ? 'No clients yet. Click "+ New" to add one.' : "No clients match your search.";
+      empty.classList.remove("hidden");
+      return;
+    }
+    empty.classList.add("hidden");
+
+    visible.forEach((c) => {
+      const card = document.createElement("div");
+      card.className = "template";
+      card.style.cursor = "default";
+      card.innerHTML = `
+        <div class="template-top">
+          <p class="template-name"></p>
+          <button class="template-icon-btn btn-edit" title="Edit">✎</button>
+          <button class="template-icon-btn danger btn-delete" title="Delete">🗑</button>
+        </div>
+        <p class="template-preview"></p>
+      `;
+      card.querySelector(".template-name").textContent = c.name;
+      card.querySelector(".template-preview").textContent = c.address || "";
+      card.querySelector(".btn-edit").addEventListener("click", () => openClientForm(c));
+      card.querySelector(".btn-delete").addEventListener("click", () => deleteClient(c.id));
+      list.appendChild(card);
+    });
+  }
+
+  let clientEditingId = null;
+
+  function openClientForm(c) {
+    clientEditingId = c ? c.id : null;
+    document.getElementById("cName").value = c ? c.name : "";
+    document.getElementById("cAddress").value = c ? (c.address || "") : "";
+    document.getElementById("clientForm").classList.remove("hidden");
+    document.getElementById("cName").focus();
+  }
+  function closeClientForm() {
+    document.getElementById("clientForm").classList.add("hidden");
+    clientEditingId = null;
+  }
+  function saveClientForm() {
+    const name = document.getElementById("cName").value.trim();
+    if (!name) { setStatus("Give this client a name.", true); return; }
+    const entry = { id: clientEditingId || Date.now().toString(), name, address: document.getElementById("cAddress").value.trim() };
+    if (clientEditingId) {
+      const idx = clients.findIndex((c) => c.id === clientEditingId);
+      if (idx !== -1) clients[idx] = entry;
+    } else {
+      clients.push(entry);
+    }
+    saveClients();
+    renderClients();
+    closeClientForm();
+    setStatus("Client saved.");
+  }
+  function deleteClient(id) {
+    clients = clients.filter((c) => c.id !== id);
+    saveClients();
+    renderClients();
+    setStatus("Client deleted.");
+  }
+
+  function exportClients() {
+    if (clients.length === 0) { setStatus("No clients to export.", true); return; }
+    const payload = { exportedAt: new Date().toISOString(), clients };
+    const date = new Date().toISOString().slice(0, 10);
+    downloadTextFile(`swift-compose-clients-${date}.json`, JSON.stringify(payload, null, 2));
+    setStatus(`Exported ${clients.length} client(s).`);
+    markExported();
+  }
+
+  function importClientsFromFile(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result));
+        const incoming = Array.isArray(parsed) ? parsed : parsed.clients;
+        if (!Array.isArray(incoming)) throw new Error("Unrecognized file format.");
+        let added = 0;
+        incoming.forEach((raw) => {
+          if (!raw || !raw.name) return;
+          clients.push({ id: (Date.now() + added).toString(), name: raw.name, address: raw.address || "" });
+          added++;
+        });
+        saveClients();
+        renderClients();
+        setStatus(`Imported ${added} client(s).`);
+      } catch (e) {
+        setStatus("Import failed: " + e.message, true);
+      }
+    };
+    reader.onerror = () => setStatus("Couldn't read the file.", true);
+    reader.readAsText(file);
+  }
+
+  // Opens a "Select a client" modal and resolves with the chosen client's address,
+  // or null if cancelled.
+  function promptForClientSelection() {
+    return new Promise((resolve) => {
+      if (clients.length === 0) {
+        setStatus("No clients defined yet — add one in the Clients tab.", true);
+        resolve(null);
+        return;
+      }
+      const overlay = document.getElementById("clientModalOverlay");
+      const search = document.getElementById("clientModalSearch");
+      const list = document.getElementById("clientModalList");
+      const cancelBtn = document.getElementById("clientModalCancel");
+
+      search.value = "";
+      overlay.classList.remove("hidden");
+      search.focus();
+
+      function renderOptions(query) {
+        let opts = clients.slice().sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
+        if (query) {
+          const q = query.toLowerCase();
+          opts = opts.filter((c) => c.name.toLowerCase().includes(q));
+        }
+        list.innerHTML = opts.map((c) =>
+          `<div class="tag-menu-item" data-client-id="${c.id}"><span>${c.name}</span></div>`
+        ).join("") || `<div style="font-size:11.5px; color: var(--ink-soft); padding: 6px 4px;">No matches.</div>`;
+        list.querySelectorAll("[data-client-id]").forEach((row) => {
+          row.addEventListener("click", () => {
+            const c = clients.find((x) => x.id === row.dataset.clientId);
+            cleanup();
+            resolve(c ? c.address : null);
+          });
+        });
+      }
+      renderOptions("");
+
+      function onSearchInput() { renderOptions(search.value.trim()); }
+      function onCancel() { cleanup(); resolve(null); }
+      function cleanup() {
+        overlay.classList.add("hidden");
+        search.removeEventListener("input", onSearchInput);
+        cancelBtn.removeEventListener("click", onCancel);
+      }
+      search.addEventListener("input", onSearchInput);
+      cancelBtn.addEventListener("click", onCancel);
+    });
+  }
+
+  // Opens a modal asking a custom question (from {{q:Label}}) and resolves with the typed
+  // answer, or null if cancelled.
+  function promptForQuestion(label) {
+    return new Promise((resolve) => {
+      const overlay = document.getElementById("questionModalOverlay");
+      const title = document.getElementById("questionModalTitle");
+      const input = document.getElementById("questionModalInput");
+      const confirmBtn = document.getElementById("questionModalConfirm");
+      const cancelBtn = document.getElementById("questionModalCancel");
+
+      title.textContent = label;
+      input.value = "";
+      overlay.classList.remove("hidden");
+      input.focus();
+
+      function cleanup() {
+        overlay.classList.add("hidden");
+        confirmBtn.removeEventListener("click", onConfirm);
+        cancelBtn.removeEventListener("click", onCancel);
+        input.removeEventListener("keydown", onKeydown);
+      }
+      function onConfirm() {
+        const value = input.value.trim();
+        if (!value) return;
+        cleanup();
+        resolve(value);
+      }
+      function onCancel() { cleanup(); resolve(null); }
+      function onKeydown(e) { if (e.key === "Enter") onConfirm(); }
+
+      confirmBtn.addEventListener("click", onConfirm);
+      cancelBtn.addEventListener("click", onCancel);
+      input.addEventListener("keydown", onKeydown);
+    });
+  }
+
+  // Finds every {{q:Label}} in a text and resolves them one at a time (so identical labels
+  // used twice can still get different answers). Returns the resolved text, or null if any
+  // prompt was cancelled — mirrors {{c}}/{{dn}}'s "cancel aborts the whole insertion" behavior.
+  async function resolveQuestionTagsInText(text) {
+    let result = text;
+    const regex = /\{\{q:([^}]*)\}\}/;
+    let match;
+    while ((match = result.match(regex))) {
+      const label = match[1].trim() || "Question";
+      const answer = await promptForQuestion(label);
+      if (answer === null) return null;
+      result = result.replace(match[0], answer);
+    }
+    return result;
+  }
+
   Office.onReady(() => {
     loadTemplates();
     currentSort = loadSortPref();
@@ -3031,7 +3386,7 @@
 
     // View switching — restores whichever section was open last time
     function switchView(selected) {
-      ["viewTemplates", "viewDirectory", "viewCodes", "viewHelp"].forEach((id) => {
+      ["viewTemplates", "viewDirectory", "viewClients", "viewCodes", "viewHelp"].forEach((id) => {
         document.getElementById(id).classList.toggle("hidden", id !== selected);
       });
       localStorage.setItem(LAST_VIEW_KEY, selected);
@@ -3059,6 +3414,26 @@
     document.getElementById("dirSearchInput").addEventListener("input", (e) => {
       dirSearch = e.target.value.trim();
       renderDirectory();
+    });
+
+    // Clients
+    loadClients();
+    renderClients();
+    document.getElementById("btnClientNew").addEventListener("click", () => openClientForm(null));
+    document.getElementById("clientBtnCancel").addEventListener("click", closeClientForm);
+    document.getElementById("clientBtnSave").addEventListener("click", saveClientForm);
+    document.getElementById("btnClientExport").addEventListener("click", exportClients);
+    document.getElementById("btnClientImport").addEventListener("click", () => {
+      document.getElementById("clientImportFileInput").click();
+    });
+    document.getElementById("clientImportFileInput").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) importClientsFromFile(file);
+      e.target.value = "";
+    });
+    document.getElementById("clientSearchInput").addEventListener("input", (e) => {
+      clientSearch = e.target.value.trim();
+      renderClients();
     });
 
     document.getElementById("btnNew").addEventListener("click", () => openForm(null));
@@ -3106,6 +3481,7 @@
     const tagMenuShortcuts = document.getElementById("tagMenuShortcuts");
     const tagMenuContact = document.getElementById("tagMenuContact");
     const tagMenuAttach = document.getElementById("tagMenuAttach");
+    const tagMenuQuestion = document.getElementById("tagMenuQuestion");
     let tagMenuTargetId = "fBody";
 
     function closeTagMenu() {
@@ -3115,6 +3491,7 @@
       tagMenuShortcuts.classList.add("hidden");
       tagMenuContact.classList.add("hidden");
       tagMenuAttach.classList.add("hidden");
+      tagMenuQuestion.classList.add("hidden");
       tagMenuList.classList.remove("hidden");
     }
 
@@ -3127,6 +3504,7 @@
         tagMenuShortcuts.classList.add("hidden");
         tagMenuContact.classList.add("hidden");
         tagMenuAttach.classList.add("hidden");
+        tagMenuQuestion.classList.add("hidden");
         tagMenuList.classList.remove("hidden");
         tagMenu.classList.remove("hidden");
         // Positions the menu right under the clicked button
@@ -3244,6 +3622,30 @@
       const label = document.getElementById("attachLabel").value.trim();
       const tag = label ? `{{attach:${label}}}` : "{{attach}}";
       insertAtCursor(document.getElementById(tagMenuTargetId), tag);
+      closeTagMenu();
+    });
+
+    // "Client" item: inserts {{client}} directly, no sub-view (the picker happens at use time)
+    document.getElementById("tagItemClient").addEventListener("click", () => {
+      insertAtCursor(document.getElementById(tagMenuTargetId), "{{client}}");
+      closeTagMenu();
+    });
+
+    // "Question" item: opens a sub-view to define what should be asked
+    document.getElementById("tagItemQuestion").addEventListener("click", () => {
+      document.getElementById("questionLabel").value = "";
+      tagMenuList.classList.add("hidden");
+      tagMenuQuestion.classList.remove("hidden");
+      document.getElementById("questionLabel").focus();
+    });
+    document.getElementById("questionBack").addEventListener("click", () => {
+      tagMenuQuestion.classList.add("hidden");
+      tagMenuList.classList.remove("hidden");
+    });
+    document.getElementById("questionInsert").addEventListener("click", () => {
+      const label = document.getElementById("questionLabel").value.trim();
+      if (!label) { setStatus("Give the question a label first.", true); return; }
+      insertAtCursor(document.getElementById(tagMenuTargetId), `{{q:${label}}}`);
       closeTagMenu();
     });
 
