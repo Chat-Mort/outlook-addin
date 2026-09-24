@@ -750,7 +750,7 @@
       </div>
       <div class="tag-menu-item" id="tagItemClient">
         <span>Client</span>
-        <span class="tag-menu-help" title="Inserts {{client}} — asks you to pick a client from the Clients list every time this template is used, and inserts that client's saved address.">?</span>
+        <span class="tag-menu-help" title="Inserts {{client}} (or {{client:Group}}) — asks you to pick a client from the Clients list (optionally narrowed to one group) every time this template is used, and inserts that client's saved address.">?</span>
       </div>
       <div class="tag-menu-item" id="tagItemQuestion">
         <span>Question</span>
@@ -823,6 +823,18 @@
     </div>
 
     <!-- "Question" detail view -->
+    <!-- "Client" detail view -->
+    <div id="tagMenuClient" class="hidden">
+      <div class="tag-menu-back" id="clientTagBack">‹ Back</div>
+      <div class="tag-menu-row">
+        <label for="clientTagGroup">Group — optional</label>
+        <input type="text" id="clientTagGroup" list="clientGroupList" placeholder="Leave empty to pick from all clients" />
+      </div>
+      <div class="tag-menu-actions">
+        <button class="primary" id="clientTagInsert" style="padding:5px 8px; font-size:12px;">Insert</button>
+      </div>
+    </div>
+
     <div id="tagMenuQuestion" class="hidden">
       <div class="tag-menu-back" id="questionBack">‹ Back</div>
       <div class="tag-menu-row">
@@ -912,6 +924,10 @@
     <label for="cName">Client name</label>
     <input id="cName" type="text" placeholder="E.g. Zaragoza plant" />
 
+    <label for="cGroup">Group — optional</label>
+    <input id="cGroup" type="text" list="clientGroupList" placeholder="E.g. Spain, Regular carriers" />
+    <datalist id="clientGroupList"></datalist>
+
     <label for="cAddress">Address</label>
     <textarea id="cAddress" placeholder="Free text — whatever you'd normally paste into the mail" style="width:100%; min-height:70px; font-family: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; color: var(--ink); background: var(--card); resize: vertical;"></textarea>
 
@@ -980,7 +996,7 @@
     <tr><td><code>{{c}}</code></td><td>Asks for a specific date at insertion time (calendar picker)</td></tr>
     <tr><td><code>{{dn}}</code></td><td>Asks for a delivery note number, inserted as DNXXXXXXXX</td></tr>
     <tr><td><code>{{attach}}</code> / <code>{{attach:Label}}</code></td><td>Requests a file be attached (download/import reminder), no pre-stored file needed</td></tr>
-    <tr><td><code>{{client}}</code></td><td>Asks you to pick a client from the Clients list, inserts their saved address</td></tr>
+    <tr><td><code>{{client}}</code> / <code>{{client:Group}}</code></td><td>Asks you to pick a client (optionally narrowed to one group), inserts their saved address</td></tr>
     <tr><td><code>{{q:Question}}</code></td><td>Asks a custom question, inserts the typed answer (each occurrence asked separately)</td></tr>
   </table>
 
@@ -1094,7 +1110,7 @@
 <!-- "Select a client" modal: opens when inserting a template that contains {{client}} -->
 <div id="clientModalOverlay" class="modal-overlay hidden">
   <div class="modal-card" style="max-height: 70vh; display:flex; flex-direction:column;">
-    <h3>Select a client</h3>
+    <h3 id="clientModalTitle">Select a client</h3>
     <input type="text" id="clientModalSearch" placeholder="Search clients…" style="width:100%; font-family: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; color: var(--ink); background: var(--card); margin-bottom: 8px;" />
     <div id="clientModalList" style="overflow-y:auto; flex:1 1 auto;"></div>
     <div class="modal-actions">
@@ -2303,12 +2319,12 @@
     let subjectRaw = resolveShortcuts(t.subject || "", undefined, false, "subject")
       .replaceAll("{{c}}", "[date to be chosen]")
       .replaceAll("{{dn}}", "DN[number to be entered]")
-      .replaceAll("{{client}}", "[client address to be chosen]")
+      .replace(/\{\{client(?::([^}]*))?\}\}/g, (m, group) => group ? `[client address — ${group.trim()}]` : "[client address to be chosen]")
       .replace(/\{\{q:([^}]*)\}\}/g, (m, label) => `[${(label || "Question").trim()}]`);
     let bodyRaw = resolveShortcuts(t.body || "", undefined, false, "body")
       .replaceAll("{{c}}", "[date to be chosen]")
       .replaceAll("{{dn}}", "DN[number to be entered]")
-      .replaceAll("{{client}}", "[client address to be chosen]")
+      .replace(/\{\{client(?::([^}]*))?\}\}/g, (m, group) => group ? `[client address — ${group.trim()}]` : "[client address to be chosen]")
       .replace(/\{\{q:([^}]*)\}\}/g, (m, label) => `[${(label || "Question").trim()}]`);
 
     // {{attach}} tags don't show up in the actual email either — strip them here too,
@@ -2332,6 +2348,32 @@
       : "";
 
     document.getElementById("previewModalOverlay").classList.remove("hidden");
+  }
+
+  // Finds every {{client}} / {{client:Group}} variant used across subject+body, prompts once
+  // per distinct variant (so a template mixing an unfiltered and a filtered picker asks
+  // twice), and substitutes each. htmlMode=true converts the address's line breaks to <br>
+  // at substitution time (needed when the surrounding text is already HTML — the
+  // ##shortcut/resolveShortcutsInCurrentEmail path); otherwise they're left as real \n for
+  // markdownishToHtml to convert later. The subject always gets its line breaks flattened to
+  // spaces, since a mail subject can't actually contain line breaks.
+  async function resolveClientTags(subjectRaw, bodyRaw, htmlMode) {
+    const combined = subjectRaw + "\n" + bodyRaw;
+    const regex = /\{\{client(?::([^}]*))?\}\}/g;
+    const variants = new Map(); // tag string -> group (or null)
+    let m;
+    while ((m = regex.exec(combined))) {
+      if (!variants.has(m[0])) variants.set(m[0], m[1] ? m[1].trim() : null);
+    }
+    for (const [tag, group] of variants) {
+      const address = await promptForClientSelection(group);
+      if (address === null) return null;
+      const addressForSubject = address.replace(/\s*\n+\s*/g, " ").trim();
+      const addressForBody = htmlMode ? address.replaceAll("\n", "<br>") : address;
+      subjectRaw = subjectRaw.replaceAll(tag, addressForSubject);
+      bodyRaw = bodyRaw.replaceAll(tag, addressForBody);
+    }
+    return { subjectRaw, bodyRaw };
   }
 
   async function insertTemplate(t) {
@@ -2362,16 +2404,18 @@
       bodyRaw = bodyRaw.replaceAll("{{dn}}", dn);
     }
 
-    // {{client}}: asks you to pick a client at insertion time, replaces every occurrence
-    // with that client's saved address, once.
-    if (subjectRaw.includes("{{client}}") || bodyRaw.includes("{{client}}")) {
-      const address = await promptForClientSelection();
-      if (address === null) {
+    // {{client}} / {{client:Group}}: asks you to pick a client at insertion time, replaces
+    // every occurrence of each distinct variant with that client's saved address. The
+    // markdownishToHtml() call further below still handles the address's line breaks here
+    // (this path isn't already-HTML), so htmlMode stays false.
+    if (/\{\{client(?::[^}]*)?\}\}/.test(subjectRaw) || /\{\{client(?::[^}]*)?\}\}/.test(bodyRaw)) {
+      const resolved = await resolveClientTags(subjectRaw, bodyRaw, false);
+      if (resolved === null) {
         setStatus("Insertion cancelled.");
         return;
       }
-      subjectRaw = subjectRaw.replaceAll("{{client}}", address);
-      bodyRaw = bodyRaw.replaceAll("{{client}}", address);
+      subjectRaw = resolved.subjectRaw;
+      bodyRaw = resolved.bodyRaw;
     }
 
     // {{q:Label}}: asks a custom question per occurrence (even identical labels get their
@@ -2747,14 +2791,17 @@
         bodyRaw = bodyRaw.replaceAll("{{dn}}", dn);
       }
 
-      if (subjectRaw.includes("{{client}}") || bodyRaw.includes("{{client}}")) {
-        const address = await promptForClientSelection();
-        if (address === null) {
+      // {{client}} / {{client:Group}}: the body here is already HTML (fetched straight from
+      // the open draft), so htmlMode=true converts the address's line breaks to <br> right
+      // at substitution time — otherwise raw \n gets silently collapsed by HTML rendering.
+      if (/\{\{client(?::[^}]*)?\}\}/.test(subjectRaw) || /\{\{client(?::[^}]*)?\}\}/.test(bodyRaw)) {
+        const resolved = await resolveClientTags(subjectRaw, bodyRaw, true);
+        if (resolved === null) {
           setStatus("Cancelled.");
           return;
         }
-        subjectRaw = subjectRaw.replaceAll("{{client}}", address);
-        bodyRaw = bodyRaw.replaceAll("{{client}}", address);
+        subjectRaw = resolved.subjectRaw;
+        bodyRaw = resolved.bodyRaw;
       }
 
       subjectRaw = await resolveQuestionTagsInText(subjectRaw);
@@ -3157,6 +3204,36 @@
   }
 
   let clientSearch = "";
+  const CLIENT_COLLAPSED_KEY = "modeles_pro_client_collapsed_groups_v1";
+  function loadClientCollapsedGroups() {
+    try { return new Set(JSON.parse(localStorage.getItem(CLIENT_COLLAPSED_KEY) || "[]")); }
+    catch (e) { return new Set(); }
+  }
+  function saveClientCollapsedGroups(set) {
+    localStorage.setItem(CLIENT_COLLAPSED_KEY, JSON.stringify([...set]));
+  }
+  let clientCollapsedGroups = loadClientCollapsedGroups();
+
+  // Same grouping pattern as templates' categories / directory's services.
+  function groupClientsByGroup(list) {
+    const groups = new Map();
+    list.forEach((c) => {
+      const g = c.group || "";
+      if (!groups.has(g)) groups.set(g, []);
+      groups.get(g).push(c);
+    });
+    const orderedKeys = [...groups.keys()]
+      .filter((k) => k !== "")
+      .sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
+    if (groups.has("")) orderedKeys.push("");
+    return orderedKeys.map((k) => ({ group: k, items: groups.get(k) }));
+  }
+
+  function refreshClientGroupDatalist() {
+    const datalist = document.getElementById("clientGroupList");
+    const groups = [...new Set(clients.map((c) => c.group).filter(Boolean))].sort();
+    datalist.innerHTML = groups.map((g) => `<option value="${g.replace(/"/g, "&quot;")}"></option>`).join("");
+  }
 
   function renderClients() {
     const list = document.getElementById("clientList");
@@ -3166,7 +3243,9 @@
     let visible = clients.slice().sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
     if (clientSearch) {
       const q = clientSearch.toLowerCase();
-      visible = visible.filter((c) => c.name.toLowerCase().includes(q) || (c.address || "").toLowerCase().includes(q));
+      visible = visible.filter((c) =>
+        c.name.toLowerCase().includes(q) || (c.address || "").toLowerCase().includes(q) || (c.group || "").toLowerCase().includes(q)
+      );
     }
 
     if (visible.length === 0) {
@@ -3176,23 +3255,44 @@
     }
     empty.classList.add("hidden");
 
-    visible.forEach((c) => {
-      const card = document.createElement("div");
-      card.className = "template";
-      card.style.cursor = "default";
-      card.innerHTML = `
-        <div class="template-top">
-          <p class="template-name"></p>
-          <button class="template-icon-btn btn-edit" title="Edit">✎</button>
-          <button class="template-icon-btn danger btn-delete" title="Delete">🗑</button>
-        </div>
-        <p class="template-preview"></p>
-      `;
-      card.querySelector(".template-name").textContent = c.name;
-      card.querySelector(".template-preview").textContent = c.address || "";
-      card.querySelector(".btn-edit").addEventListener("click", () => openClientForm(c));
-      card.querySelector(".btn-delete").addEventListener("click", () => deleteClient(c.id));
-      list.appendChild(card);
+    const groups = groupClientsByGroup(visible);
+    const showHeaders = groups.length > 1;
+
+    groups.forEach((g) => {
+      const isCollapsed = showHeaders && clientCollapsedGroups.has(g.group);
+
+      if (showHeaders) {
+        const header = document.createElement("div");
+        header.className = "category-header" + (isCollapsed ? " collapsed" : "");
+        header.innerHTML = `<span><span class="chevron">▾</span> ${g.group || "Uncategorized"} (${g.items.length})</span>`;
+        header.addEventListener("click", () => {
+          if (clientCollapsedGroups.has(g.group)) clientCollapsedGroups.delete(g.group);
+          else clientCollapsedGroups.add(g.group);
+          saveClientCollapsedGroups(clientCollapsedGroups);
+          renderClients();
+        });
+        list.appendChild(header);
+      }
+      if (isCollapsed) return;
+
+      g.items.forEach((c) => {
+        const card = document.createElement("div");
+        card.className = "template";
+        card.style.cursor = "default";
+        card.innerHTML = `
+          <div class="template-top">
+            <p class="template-name"></p>
+            <button class="template-icon-btn btn-edit" title="Edit">✎</button>
+            <button class="template-icon-btn danger btn-delete" title="Delete">🗑</button>
+          </div>
+          <p class="template-preview"></p>
+        `;
+        card.querySelector(".template-name").textContent = c.name;
+        card.querySelector(".template-preview").textContent = c.address || "";
+        card.querySelector(".btn-edit").addEventListener("click", () => openClientForm(c));
+        card.querySelector(".btn-delete").addEventListener("click", () => deleteClient(c.id));
+        list.appendChild(card);
+      });
     });
   }
 
@@ -3201,7 +3301,9 @@
   function openClientForm(c) {
     clientEditingId = c ? c.id : null;
     document.getElementById("cName").value = c ? c.name : "";
+    document.getElementById("cGroup").value = c ? (c.group || "") : "";
     document.getElementById("cAddress").value = c ? (c.address || "") : "";
+    refreshClientGroupDatalist();
     document.getElementById("clientForm").classList.remove("hidden");
     document.getElementById("cName").focus();
   }
@@ -3212,7 +3314,12 @@
   function saveClientForm() {
     const name = document.getElementById("cName").value.trim();
     if (!name) { setStatus("Give this client a name.", true); return; }
-    const entry = { id: clientEditingId || Date.now().toString(), name, address: document.getElementById("cAddress").value.trim() };
+    const entry = {
+      id: clientEditingId || Date.now().toString(),
+      name,
+      group: document.getElementById("cGroup").value.trim(),
+      address: document.getElementById("cAddress").value.trim()
+    };
     if (clientEditingId) {
       const idx = clients.findIndex((c) => c.id === clientEditingId);
       if (idx !== -1) clients[idx] = entry;
@@ -3250,7 +3357,7 @@
         let added = 0;
         incoming.forEach((raw) => {
           if (!raw || !raw.name) return;
-          clients.push({ id: (Date.now() + added).toString(), name: raw.name, address: raw.address || "" });
+          clients.push({ id: (Date.now() + added).toString(), name: raw.name, group: raw.group || "", address: raw.address || "" });
           added++;
         });
         saveClients();
@@ -3266,24 +3373,35 @@
 
   // Opens a "Select a client" modal and resolves with the chosen client's address,
   // or null if cancelled.
-  function promptForClientSelection() {
+  // groupFilter: if given, only clients in that group are offered and the search box is
+  // hidden (a filtered list is already short enough not to need it).
+  function promptForClientSelection(groupFilter) {
     return new Promise((resolve) => {
-      if (clients.length === 0) {
-        setStatus("No clients defined yet — add one in the Clients tab.", true);
+      const pool = groupFilter ? clients.filter((c) => c.group === groupFilter) : clients;
+      if (pool.length === 0) {
+        setStatus(
+          groupFilter
+            ? `No clients in group "${groupFilter}" — check the group name or add one in the Clients tab.`
+            : "No clients defined yet — add one in the Clients tab.",
+          true
+        );
         resolve(null);
         return;
       }
       const overlay = document.getElementById("clientModalOverlay");
+      const title = document.getElementById("clientModalTitle");
       const search = document.getElementById("clientModalSearch");
       const list = document.getElementById("clientModalList");
       const cancelBtn = document.getElementById("clientModalCancel");
 
+      title.textContent = groupFilter ? `Select a client — ${groupFilter}` : "Select a client";
       search.value = "";
+      search.classList.toggle("hidden", !!groupFilter);
       overlay.classList.remove("hidden");
-      search.focus();
+      if (!groupFilter) search.focus();
 
       function renderOptions(query) {
-        let opts = clients.slice().sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
+        let opts = pool.slice().sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
         if (query) {
           const q = query.toLowerCase();
           opts = opts.filter((c) => c.name.toLowerCase().includes(q));
@@ -3293,7 +3411,7 @@
         ).join("") || `<div style="font-size:11.5px; color: var(--ink-soft); padding: 6px 4px;">No matches.</div>`;
         list.querySelectorAll("[data-client-id]").forEach((row) => {
           row.addEventListener("click", () => {
-            const c = clients.find((x) => x.id === row.dataset.clientId);
+            const c = pool.find((x) => x.id === row.dataset.clientId);
             cleanup();
             resolve(c ? c.address : null);
           });
@@ -3482,6 +3600,7 @@
     const tagMenuContact = document.getElementById("tagMenuContact");
     const tagMenuAttach = document.getElementById("tagMenuAttach");
     const tagMenuQuestion = document.getElementById("tagMenuQuestion");
+    const tagMenuClient = document.getElementById("tagMenuClient");
     let tagMenuTargetId = "fBody";
 
     function closeTagMenu() {
@@ -3492,6 +3611,7 @@
       tagMenuContact.classList.add("hidden");
       tagMenuAttach.classList.add("hidden");
       tagMenuQuestion.classList.add("hidden");
+      tagMenuClient.classList.add("hidden");
       tagMenuList.classList.remove("hidden");
     }
 
@@ -3505,6 +3625,7 @@
         tagMenuContact.classList.add("hidden");
         tagMenuAttach.classList.add("hidden");
         tagMenuQuestion.classList.add("hidden");
+        tagMenuClient.classList.add("hidden");
         tagMenuList.classList.remove("hidden");
         tagMenu.classList.remove("hidden");
         // Positions the menu right under the clicked button
@@ -3625,9 +3746,22 @@
       closeTagMenu();
     });
 
-    // "Client" item: inserts {{client}} directly, no sub-view (the picker happens at use time)
+    // "Client" item: opens a sub-view to optionally restrict the picker to one group
     document.getElementById("tagItemClient").addEventListener("click", () => {
-      insertAtCursor(document.getElementById(tagMenuTargetId), "{{client}}");
+      document.getElementById("clientTagGroup").value = "";
+      refreshClientGroupDatalist();
+      tagMenuList.classList.add("hidden");
+      tagMenuClient.classList.remove("hidden");
+      document.getElementById("clientTagGroup").focus();
+    });
+    document.getElementById("clientTagBack").addEventListener("click", () => {
+      tagMenuClient.classList.add("hidden");
+      tagMenuList.classList.remove("hidden");
+    });
+    document.getElementById("clientTagInsert").addEventListener("click", () => {
+      const group = document.getElementById("clientTagGroup").value.trim();
+      const tag = group ? `{{client:${group}}}` : "{{client}}";
+      insertAtCursor(document.getElementById(tagMenuTargetId), tag);
       closeTagMenu();
     });
 
