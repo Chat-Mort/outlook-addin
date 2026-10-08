@@ -65,7 +65,7 @@ Don't want to remember the syntax? There's a ⚡ button next to the subject and 
 - A searchable palette for everything that's a pain to type: superscripts and subscripts (², ³, ᵉ, ₂…), accented letters, fractions, French typographic spaces (NBSP, narrow NBSP), quotes and dashes, math, currency, arrows, symbols, Greek, and the awkward ASCII ones (`~ # { } [ ] | \ ^ @`).
 - Search by name, keyword or code. French keywords work too (`exposant`, `flèche`, `cédille`), and you can paste a character to find it.
 - Click a character to drop it at the cursor of the open draft, or flip the drop-down to **copy** mode (also what you get if no draft is open).
-- Hover a character to see how to type it by hand: `Alt` + numeric keypad code, `hex code → Alt+X` (classic Outlook / Word engine only), the Unicode code point, plus Word's own shortcut when there is one.
+- Hover a character to see its codes: the Unicode code point (`U+00C9`), then the numeric-keypad `Alt` codes, OEM first (`Alt +144`) and ANSI second (`Alt +0201`). When a character has no such code, the line just isn't there.
 - A **Recent** tab remembers what you used last, and a small converter turns text into superscript or subscript (`1er` → `1ᵉʳ`, select just part of the text to convert only that).
 
 ### The rest
