@@ -2,7 +2,7 @@
 
 An Outlook add-in I built because I was sick of retyping the same emails all day (pickup requests, delivery notes, you name it). It started as "just insert today's date in my templates" and, well... it got out of hand.
 
-Right now it does templates with smart tags, a contact directory, a client address book and a barcode/QR generator, all in one side panel. There's no backend, no server, nothing phoning home: it all runs in your browser and your data stays in your own mailbox / browser.
+Right now it does templates with smart tags, a contact directory, a client address book, a barcode/QR generator and a palette of hard-to-type characters, all in one side panel. There's no backend, no server, nothing phoning home: it all runs in your browser and your data stays in your own mailbox / browser.
 
 ---
 
@@ -61,8 +61,15 @@ Don't want to remember the syntax? There's a ⚡ button next to the subject and 
 - There's a Data Matrix login badge helper: type a login and a password and it builds the `\tLOGIN\tPASSWORD\t\t\r\n` line for you.
 - It can also read an existing code from an image (drag & drop or file picker).
 
+### Characters
+- A searchable palette for everything that's a pain to type: superscripts and subscripts (², ³, ᵉ, ₂…), accented letters, fractions, French typographic spaces (NBSP, narrow NBSP), quotes and dashes, math, currency, arrows, symbols, Greek, and the awkward ASCII ones (`~ # { } [ ] | \ ^ @`).
+- Search by name, keyword or code. French keywords work too (`exposant`, `flèche`, `cédille`), and you can paste a character to find it.
+- Click a character to drop it at the cursor of the open draft, or flip the drop-down to **copy** mode (also what you get if no draft is open).
+- Hover a character to see how to type it by hand: `Alt` + numeric keypad code, `hex code → Alt+X` (classic Outlook / Word engine only), the Unicode code point, plus Word's own shortcut when there is one.
+- A **Recent** tab remembers what you used last, and a small converter turns text into superscript or subscript (`1er` → `1ᵉʳ`, select just part of the text to convert only that).
+
 ### The rest
-- Dropdown to switch sections (Templates / Directory / Clients / Codes / Help) that remembers where you were, plus a global search (hit `/` to jump to it).
+- Dropdown to switch sections (Templates / Directory / Clients / Codes / Characters / Help) that remembers where you were, plus a global search (hit `/` to jump to it).
 - Follows Outlook's light/dark theme, with a manual toggle, and a compact / comfortable density switch.
 - A Help tab with a tag cheat sheet, a storage gauge, a backup reminder and a changelog.
 
@@ -150,7 +157,7 @@ No server, no tracking. Here's where everything ends up:
 | Template text, subjects, recipients, categories | Outlook roaming settings (your mailbox) | Yes, but capped at 32 KB (there's a gauge in the Help tab) |
 | Template attachments | Browser `localStorage` | No |
 | Directory, Clients | Browser `localStorage` | No |
-| Code history, theme, density, sort and collapsed-group preferences | Browser `localStorage` | No |
+| Code history, recent characters, theme, density, sort and collapsed-group preferences | Browser `localStorage` | No |
 
 What that means in practice:
 
