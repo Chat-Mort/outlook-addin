@@ -2,7 +2,7 @@
 
 An Outlook add-in I built because I was sick of retyping the same emails all day (pickup requests, delivery notes, you name it). It started as "just insert today's date in my templates" and, well... it got out of hand.
 
-Right now it does templates with smart tags, a contact directory, a client address book, a barcode/QR generator and a palette of hard-to-type characters, all in one side panel. There's no backend, no server, nothing phoning home: it all runs in your browser and your data stays in your own mailbox / browser.
+Right now it does templates with smart tags, a contact directory, a supplier address book, a barcode/QR generator and a palette of hard-to-type characters, all in one side panel. There's no backend, no server, nothing phoning home: it all runs in your browser and your data stays in your own mailbox / browser.
 
 ---
 
@@ -27,7 +27,9 @@ Tags get resolved every time you use a template. Dates come out as `DD/MM/YYYY`.
 | `{{w}}`, `{{w+N}}`, `{{w-N}}` | ISO week number, N weeks ahead / back |
 | `{{c}}` | Pops up a calendar to pick a date |
 | `{{dn}}` | Asks for a delivery note number, inserted as `DNXXXXXXXX` |
-| `{{client}}`, `{{client:Group}}` | Pick a client (optionally only from one group) and drop in their saved address |
+| `{{supplier}}`, `{{supplier:Group}}` | Pick a supplier (optionally only from one group). In To / Cc / Bcc: all of its email addresses; in the subject / body: its name |
+| `{{supplier-address}}`, `{{supplier-address:Group}}` | Same pick, drops in the supplier's postal address |
+| `##shortcut` in To / Cc / Bcc | Pulls the same field of the template that owns the shortcut |
 | `{{q:Question}}` | Asks your custom question and inserts the answer. Every occurrence gets asked separately |
 | `{{attach}}`, `{{attach:Label}}` | Reminds you to attach a file. The tag itself never shows up in the email |
 
@@ -50,8 +52,10 @@ Don't want to remember the syntax? There's a ⚡ button next to the subject and 
 - Grouped by service (collapsible), searchable, one-click copy of each number, and you can rename a whole service in one go.
 - Export / import as JSON.
 
-### Clients
-- Address book for clients: name, optional group, multi-line address. This is what `{{client}}` pulls from.
+### Suppliers
+- Address book for suppliers (formerly "Clients", same data): name, optional group, one or more email addresses, optional multi-line postal address. This is what `{{supplier}}` pulls from.
+- The ⚡ button next to To / Cc / Bcc offers Supplier and Shortcuts. With `{{supplier:Group}}` in To, every new email asks you to pick one supplier from that group and adds all of its email addresses.
+- One pick per group for the whole email. Older templates using `{{client}}` keep working (postal address in the body, email addresses in To / Cc / Bcc).
 - Grouped and collapsible, with export / import too.
 
 ### Codes
@@ -69,7 +73,7 @@ Don't want to remember the syntax? There's a ⚡ button next to the subject and 
 - A **Recent** tab remembers what you used last, and a small converter turns text into superscript or subscript (`1er` → `1ᵉʳ`, select just part of the text to convert only that).
 
 ### The rest
-- Dropdown to switch sections (Templates / Directory / Clients / Codes / Characters / Help) that remembers where you were, plus a global search (hit `/` to jump to it).
+- Dropdown to switch sections (Templates / Directory / Suppliers / Codes / Characters / Help) that remembers where you were, plus a global search (hit `/` to jump to it).
 - Follows Outlook's light/dark theme, with a manual toggle, and a compact / comfortable density switch.
 - A Help tab with a tag cheat sheet, a storage gauge, a backup reminder and a changelog.
 
@@ -139,7 +143,7 @@ The Help tab inside the add-in has the same thing:
 {{w}}  {{w+1}}                 this week number / next week
 {{c}}                          calendar picker
 {{dn}}                         delivery note number → DNXXXXXXXX
-{{client}}  {{client:Spain}}   pick a client (optionally within group "Spain")
+{{supplier}}  {{supplier:Oils}}   pick a supplier (optionally within group "Oils")
 {{q:PO number}}                ask "PO number", insert the answer
 {{attach}}  {{attach:CMR}}     ask for an attachment, optionally labelled
 ##shortcut                     pull in another template's subject/body
@@ -156,7 +160,7 @@ No server, no tracking. Here's where everything ends up:
 |---|---|---|
 | Template text, subjects, recipients, categories | Outlook roaming settings (your mailbox) | Yes, but capped at 32 KB (there's a gauge in the Help tab) |
 | Template attachments | Browser `localStorage` | No |
-| Directory, Clients | Browser `localStorage` | No |
+| Directory, Suppliers | Browser `localStorage` | No |
 | Code history, recent characters, theme, density, sort and collapsed-group preferences | Browser `localStorage` | No |
 
 What that means in practice:

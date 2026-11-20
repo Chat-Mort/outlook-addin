@@ -631,7 +631,7 @@
     <select id="viewSelect" style="flex:1 1 auto;">
       <option value="viewTemplates">Templates</option>
       <option value="viewDirectory">Directory</option>
-      <option value="viewClients">Clients</option>
+      <option value="viewClients">Suppliers</option>
       <option value="viewCodes">Codes</option>
       <option value="viewChars">Characters</option>
       <option value="viewHelp">Help</option>
@@ -698,13 +698,22 @@
     <p id="shortcutHint" class="subject-length-hint"></p>
 
     <label for="fTo">Recipients (To)</label>
-    <input id="fTo" type="text" placeholder="e.g. contact@client.com, other@client.com" />
+    <div class="field-with-calendar">
+      <input id="fTo" type="text" placeholder="e.g. contact@supplier.com, {{supplier:Oils}}" />
+      <button type="button" class="btn-calendar" data-target="fTo" data-kind="recipients" title="Insert a supplier or a ##shortcut">⚡</button>
+    </div>
 
     <label for="fCc">Cc — optional</label>
-    <input id="fCc" type="text" placeholder="e.g. adv@mycompany.com" />
+    <div class="field-with-calendar">
+      <input id="fCc" type="text" placeholder="e.g. adv@mycompany.com" />
+      <button type="button" class="btn-calendar" data-target="fCc" data-kind="recipients" title="Insert a supplier or a ##shortcut">⚡</button>
+    </div>
 
     <label for="fBcc">Bcc — optional</label>
-    <input id="fBcc" type="text" placeholder="e.g. archive@mycompany.com" />
+    <div class="field-with-calendar">
+      <input id="fBcc" type="text" placeholder="e.g. archive@mycompany.com" />
+      <button type="button" class="btn-calendar" data-target="fBcc" data-kind="recipients" title="Insert a supplier or a ##shortcut">⚡</button>
+    </div>
 
     <label for="fSubject">Subject</label>
     <div class="field-with-calendar">
@@ -766,8 +775,8 @@
         <span class="tag-menu-help" title="Inserts {{attach}} (or {{attach:Label}}) — reminds whoever uses this template to attach a file, with the download/import flow, but without any file pre-stored in the template.">?</span>
       </div>
       <div class="tag-menu-item" id="tagItemClient">
-        <span>Client</span>
-        <span class="tag-menu-help" title="Inserts {{client}} (or {{client:Group}}) — asks you to pick a client from the Clients list (optionally narrowed to one group) every time this template is used, and inserts that client's saved address.">?</span>
+        <span>Supplier</span>
+        <span class="tag-menu-help" title="Inserts {{supplier}} (or {{supplier:Group}}) — asks you to pick a supplier from the Suppliers list (optionally narrowed to one group) every time this template is used. In To / Cc / Bcc it adds all of that supplier's email addresses; in the subject or body it inserts its name (or its postal address with {{supplier-address}}).">?</span>
       </div>
       <div class="tag-menu-item" id="tagItemQuestion">
         <span>Question</span>
@@ -840,13 +849,21 @@
     </div>
 
     <!-- "Question" detail view -->
-    <!-- "Client" detail view -->
+    <!-- "Supplier" detail view -->
     <div id="tagMenuClient" class="hidden">
       <div class="tag-menu-back" id="clientTagBack">‹ Back</div>
       <div class="tag-menu-row">
         <label for="clientTagGroup">Group — optional</label>
-        <input type="text" id="clientTagGroup" list="clientGroupList" placeholder="Leave empty to pick from all clients" />
+        <input type="text" id="clientTagGroup" list="clientGroupList" placeholder="Leave empty to pick from all suppliers" />
       </div>
+      <div class="tag-menu-row" id="clientTagWhatRow">
+        <label for="clientTagWhat">Insert</label>
+        <select id="clientTagWhat">
+          <option value="name">Supplier name</option>
+          <option value="address">Postal address</option>
+        </select>
+      </div>
+      <p class="form-hint" id="clientTagRecipientsHint" style="margin:2px 0 6px;">Adds all of the chosen supplier's email addresses.</p>
       <div class="tag-menu-actions">
         <button class="primary" id="clientTagInsert" style="padding:5px 8px; font-size:12px;">Insert</button>
       </div>
@@ -923,30 +940,34 @@
 
 <div id="viewClients" class="hidden">
   <div class="list-head">
-    <h2>Clients <span id="clientsSyncStatus" class="sync-status"></span></h2>
+    <h2>Suppliers <span id="clientsSyncStatus" class="sync-status"></span></h2>
     <div style="display:flex; gap:6px;">
-      <button class="ghost" id="btnClientExport" title="Export all clients as a JSON backup file">⬇</button>
-      <button class="ghost" id="btnClientImport" title="Import clients from a JSON backup file">⬆</button>
+      <button class="ghost" id="btnClientExport" title="Export all suppliers as a JSON backup file">⬇</button>
+      <button class="ghost" id="btnClientImport" title="Import suppliers from a JSON backup file">⬆</button>
       <button class="primary" id="btnClientNew">+ New</button>
     </div>
   </div>
   <input type="file" id="clientImportFileInput" accept="application/json" class="hidden" />
 
-  <input type="text" id="clientSearchInput" class="search-input" placeholder="Search clients…" />
+  <input type="text" id="clientSearchInput" class="search-input" placeholder="Search suppliers…" />
 
   <div id="clientList"></div>
-  <div id="clientEmptyState" class="empty hidden">No clients yet. Click "+ New" to add one.</div>
+  <div id="clientEmptyState" class="empty hidden">No suppliers yet. Click "+ New" to add one.</div>
 
   <div id="clientForm" class="form hidden">
-    <label for="cName">Client name</label>
-    <input id="cName" type="text" placeholder="E.g. Zaragoza plant" />
+    <label for="cName">Supplier name</label>
+    <input id="cName" type="text" placeholder="E.g. Würth" />
 
     <label for="cGroup">Group — optional</label>
-    <input id="cGroup" type="text" list="clientGroupList" placeholder="E.g. Spain, Regular carriers" />
+    <input id="cGroup" type="text" list="clientGroupList" placeholder="E.g. Oils, Fasteners, Packaging" />
     <datalist id="clientGroupList"></datalist>
 
-    <label for="cAddress">Address</label>
-    <textarea id="cAddress" placeholder="Free text — whatever you'd normally paste into the mail" style="width:100%; min-height:70px; font-family: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; color: var(--ink); background: var(--card); resize: vertical;"></textarea>
+    <label for="cEmails">Email address(es)</label>
+    <textarea id="cEmails" placeholder="One per line, or separated by ; or ," style="width:100%; min-height:54px; font-family: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; color: var(--ink); background: var(--card); resize: vertical;"></textarea>
+    <p class="form-hint" style="margin-top:2px;">All of them are added at once when this supplier is picked for a {{supplier}} tag in To / Cc / Bcc.</p>
+
+    <label for="cAddress">Postal address — optional</label>
+    <textarea id="cAddress" placeholder="Free text — inserted by {{supplier-address}}" style="width:100%; min-height:70px; font-family: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; color: var(--ink); background: var(--card); resize: vertical;"></textarea>
 
     <div class="form-actions">
       <button class="ghost" id="clientBtnCancel">Cancel</button>
@@ -1037,7 +1058,9 @@
     <tr><td><code>{{c}}</code></td><td>Asks for a specific date at insertion time (calendar picker)</td></tr>
     <tr><td><code>{{dn}}</code></td><td>Asks for a delivery note number, inserted as DNXXXXXXXX</td></tr>
     <tr><td><code>{{attach}}</code> / <code>{{attach:Label}}</code></td><td>Requests a file be attached (download/import reminder), no pre-stored file needed</td></tr>
-    <tr><td><code>{{client}}</code> / <code>{{client:Group}}</code></td><td>Asks you to pick a client (optionally narrowed to one group), inserts their saved address</td></tr>
+    <tr><td><code>{{supplier}}</code> / <code>{{supplier:Group}}</code></td><td>Asks you to pick a supplier (optionally narrowed to one group). In To / Cc / Bcc: adds all its email addresses. In the subject / body: its name</td></tr>
+    <tr><td><code>{{supplier-address}}</code> / <code>{{supplier-address:Group}}</code></td><td>Same pick, inserts the supplier's postal address (subject / body)</td></tr>
+    <tr><td><code>##shortcut</code> in To / Cc / Bcc</td><td>Pulls the same field (To, Cc or Bcc) of the template that owns the shortcut</td></tr>
     <tr><td><code>{{q:Question}}</code></td><td>Asks a custom question, inserts the typed answer (each occurrence asked separately)</td></tr>
   </table>
 
@@ -1162,11 +1185,11 @@
   </div>
 </div>
 
-<!-- "Select a client" modal: opens when inserting a template that contains {{client}} -->
+<!-- "Select a supplier" modal: opens when inserting a template that contains {{supplier}} -->
 <div id="clientModalOverlay" class="modal-overlay hidden">
   <div class="modal-card" style="max-height: 70vh; display:flex; flex-direction:column;">
-    <h3 id="clientModalTitle">Select a client</h3>
-    <input type="text" id="clientModalSearch" placeholder="Search clients…" style="width:100%; font-family: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; color: var(--ink); background: var(--card); margin-bottom: 8px;" />
+    <h3 id="clientModalTitle">Select a supplier</h3>
+    <input type="text" id="clientModalSearch" placeholder="Search suppliers…" style="width:100%; font-family: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; color: var(--ink); background: var(--card); margin-bottom: 8px;" />
     <div id="clientModalList" style="overflow-y:auto; flex:1 1 auto;"></div>
     <div class="modal-actions">
       <button class="ghost" id="clientModalCancel">Cancel</button>
@@ -1372,7 +1395,9 @@
     return text.replace(/##(\w+)/g, (match, key) => {
       const found = templates.find((t) => t.shortcut && t.shortcut === key.toLowerCase());
       if (!found) return match; // unknown shortcut: leave the text as-is
-      const sourceText = (sourceField === "subject" ? found.subject : found.body) || "";
+      // Field-specific: a ##shortcut pulls the same field of the referenced template
+      // (subject -> subject, body -> body, To -> To, Cc -> Cc, Bcc -> Bcc).
+      const sourceText = (["subject", "to", "cc", "bcc"].includes(sourceField) ? found[sourceField] : found.body) || "";
       const resolved = resolveShortcuts(sourceText, maxDepth - 1, htmlMode, sourceField);
       return htmlMode ? resolved.replaceAll("\n", "<br>") : resolved;
     });
@@ -2374,12 +2399,12 @@
     let subjectRaw = resolveShortcuts(t.subject || "", undefined, false, "subject")
       .replaceAll("{{c}}", "[date to be chosen]")
       .replaceAll("{{dn}}", "DN[number to be entered]")
-      .replace(/\{\{client(?::([^}]*))?\}\}/g, (m, group) => group ? `[client address — ${group.trim()}]` : "[client address to be chosen]")
+      .replace(SUPPLIER_TAG_RE, (m) => previewSupplierTags(m))
       .replace(/\{\{q:([^}]*)\}\}/g, (m, label) => `[${(label || "Question").trim()}]`);
     let bodyRaw = resolveShortcuts(t.body || "", undefined, false, "body")
       .replaceAll("{{c}}", "[date to be chosen]")
       .replaceAll("{{dn}}", "DN[number to be entered]")
-      .replace(/\{\{client(?::([^}]*))?\}\}/g, (m, group) => group ? `[client address — ${group.trim()}]` : "[client address to be chosen]")
+      .replace(SUPPLIER_TAG_RE, (m) => previewSupplierTags(m))
       .replace(/\{\{q:([^}]*)\}\}/g, (m, label) => `[${(label || "Question").trim()}]`);
 
     // {{attach}} tags don't show up in the actual email either — strip them here too,
@@ -2405,35 +2430,84 @@
     document.getElementById("previewModalOverlay").classList.remove("hidden");
   }
 
-  // Finds every {{client}} / {{client:Group}} variant used across subject+body, prompts once
-  // per distinct variant (so a template mixing an unfiltered and a filtered picker asks
-  // twice), and substitutes each. htmlMode=true converts the address's line breaks to <br>
-  // at substitution time (needed when the surrounding text is already HTML — the
-  // ##shortcut/resolveShortcutsInCurrentEmail path); otherwise they're left as real \n for
-  // markdownishToHtml to convert later. The subject always gets its line breaks flattened to
-  // spaces, since a mail subject can't actually contain line breaks.
-  async function resolveClientTags(subjectRaw, bodyRaw, htmlMode) {
-    const combined = subjectRaw + "\n" + bodyRaw;
-    const regex = /\{\{client(?::([^}]*))?\}\}/g;
-    const variants = new Map(); // tag string -> group (or null)
-    let m;
-    while ((m = regex.exec(combined))) {
-      if (!variants.has(m[0])) variants.set(m[0], m[1] ? m[1].trim() : null);
+  // ===== {{supplier}} tags =====
+  // {{supplier}} / {{supplier:Group}}          -> To/Cc/Bcc: all of the supplier's email
+  //                                                addresses; subject/body: its name
+  // {{supplier-address}} / {{supplier-address:Group}} -> its postal address
+  // {{client}} / {{client:Group}} (older templates) -> still works: postal address in the
+  //                                                subject/body, email addresses in To/Cc/Bcc
+  // One pick per group for the whole email: {{supplier:Oils}} in To and
+  // {{supplier-address:Oils}} in the body ask only once.
+  const SUPPLIER_TAG_RE = /\{\{(supplier-address|supplier|client)(?::([^}]*))?\}\}/g;
+  function hasSupplierTag(text) {
+    SUPPLIER_TAG_RE.lastIndex = 0;
+    const found = SUPPLIER_TAG_RE.test(text || "");
+    SUPPLIER_TAG_RE.lastIndex = 0;
+    return found;
+  }
+  function supplierEmails(c) {
+    return String((c && c.emails) || "").split(/[\n,;]+/).map((x) => x.trim()).filter(Boolean);
+  }
+
+  // fields: { subject, body, to, cc, bcc } (any may be missing). htmlMode=true converts the
+  // address's line breaks to <br> in the body (already-HTML path). Returns the updated
+  // fields, or null if cancelled.
+  async function resolveSupplierTags(fields, htmlMode) {
+    const out = Object.assign({}, fields);
+    const keys = Object.keys(out).filter((k) => typeof out[k] === "string");
+    const groups = []; // distinct group filters, in order of appearance ("" = all suppliers)
+    keys.forEach((k) => {
+      SUPPLIER_TAG_RE.lastIndex = 0;
+      let m;
+      while ((m = SUPPLIER_TAG_RE.exec(out[k]))) {
+        const g = m[2] ? m[2].trim() : "";
+        if (!groups.includes(g)) groups.push(g);
+      }
+    });
+    const chosen = {};
+    for (const g of groups) {
+      const c = await promptForClientSelection(g || null);
+      if (c === null) return null;
+      chosen[g] = c;
     }
-    for (const [tag, group] of variants) {
-      const address = await promptForClientSelection(group);
-      if (address === null) return null;
-      const addressForSubject = address.replace(/\s*\n+\s*/g, " ").trim();
-      const addressForBody = htmlMode ? address.replaceAll("\n", "<br>") : address;
-      subjectRaw = subjectRaw.replaceAll(tag, addressForSubject);
-      bodyRaw = bodyRaw.replaceAll(tag, addressForBody);
+    const noEmail = new Set();
+    keys.forEach((k) => {
+      const isRecipients = k === "to" || k === "cc" || k === "bcc";
+      out[k] = out[k].replace(SUPPLIER_TAG_RE, (match, kind, grp) => {
+        const c = chosen[grp ? grp.trim() : ""];
+        if (!c) return match;
+        if (isRecipients) {
+          const emails = supplierEmails(c);
+          if (emails.length === 0) noEmail.add(c.name);
+          return emails.join("; ");
+        }
+        if (kind === "supplier") return c.name;
+        const address = c.address || "";
+        if (k === "subject") return address.replace(/\s*\n+\s*/g, " ").trim();
+        return htmlMode ? address.replaceAll("\n", "<br>") : address;
+      });
+    });
+    if (noEmail.size > 0) {
+      setStatus(`No email address saved for: ${[...noEmail].join(", ")} — add it in the Suppliers tab.`, true);
     }
-    return { subjectRaw, bodyRaw };
+    return out;
+  }
+
+  // Preview placeholders for supplier tags (nothing is asked in the preview).
+  function previewSupplierTags(text) {
+    return (text || "").replace(SUPPLIER_TAG_RE, (m, kind, grp) => {
+      const what = kind === "supplier" ? "supplier name" : "supplier address";
+      return grp ? `[${what} — ${grp.trim()}]` : `[${what} to be chosen]`;
+    });
   }
 
   async function insertTemplate(t) {
     let subjectRaw = resolveShortcuts(t.subject || "", undefined, false, "subject");
     let bodyRaw = resolveShortcuts(t.body || "", undefined, false, "body");
+    // ##shortcuts also work in To / Cc / Bcc (each pulls the same field of its template)
+    let toRaw = resolveShortcuts(t.to || "", undefined, false, "to");
+    let ccRaw = resolveShortcuts(t.cc || "", undefined, false, "cc");
+    let bccRaw = resolveShortcuts(t.bcc || "", undefined, false, "bcc");
 
     // {{c}}: asks for a date at insertion time, replaces every occurrence
     // (subject + body) with the chosen date, once.
@@ -2459,18 +2533,20 @@
       bodyRaw = bodyRaw.replaceAll("{{dn}}", dn);
     }
 
-    // {{client}} / {{client:Group}}: asks you to pick a client at insertion time, replaces
-    // every occurrence of each distinct variant with that client's saved address. The
-    // markdownishToHtml() call further below still handles the address's line breaks here
-    // (this path isn't already-HTML), so htmlMode stays false.
-    if (/\{\{client(?::[^}]*)?\}\}/.test(subjectRaw) || /\{\{client(?::[^}]*)?\}\}/.test(bodyRaw)) {
-      const resolved = await resolveClientTags(subjectRaw, bodyRaw, false);
+    // {{supplier}} / {{supplier-address}} / {{client}}: asks you to pick a supplier (once per
+    // group) and fills To/Cc/Bcc with its email addresses, the subject/body with its name or
+    // address. markdownishToHtml() below still handles line breaks here, so htmlMode=false.
+    if ([subjectRaw, bodyRaw, toRaw, ccRaw, bccRaw].some(hasSupplierTag)) {
+      const resolved = await resolveSupplierTags({ subject: subjectRaw, body: bodyRaw, to: toRaw, cc: ccRaw, bcc: bccRaw }, false);
       if (resolved === null) {
         setStatus("Insertion cancelled.");
         return;
       }
-      subjectRaw = resolved.subjectRaw;
-      bodyRaw = resolved.bodyRaw;
+      subjectRaw = resolved.subject;
+      bodyRaw = resolved.body;
+      toRaw = resolved.to;
+      ccRaw = resolved.cc;
+      bccRaw = resolved.bcc;
     }
 
     // {{q:Label}}: asks a custom question per occurrence (even identical labels get their
@@ -2490,9 +2566,9 @@
 
     const subject = applyPlaceholders(subjectRaw);
     const bodyHtml = markdownishToHtml(applyPlaceholders(bodyRaw));
-    const toList = parseRecipients(t.to);
-    const ccList = parseRecipients(t.cc);
-    const bccList = parseRecipients(t.bcc);
+    const toList = parseRecipients(toRaw);
+    const ccList = parseRecipients(ccRaw);
+    const bccList = parseRecipients(bccRaw);
     const attachments = [...(t.attachments || []), ...requestedAttachments];
 
     // Marks this template as just used, for the "Recently used" sort option.
@@ -2846,17 +2922,17 @@
         bodyRaw = bodyRaw.replaceAll("{{dn}}", dn);
       }
 
-      // {{client}} / {{client:Group}}: the body here is already HTML (fetched straight from
-      // the open draft), so htmlMode=true converts the address's line breaks to <br> right
-      // at substitution time — otherwise raw \n gets silently collapsed by HTML rendering.
-      if (/\{\{client(?::[^}]*)?\}\}/.test(subjectRaw) || /\{\{client(?::[^}]*)?\}\}/.test(bodyRaw)) {
-        const resolved = await resolveClientTags(subjectRaw, bodyRaw, true);
+      // {{supplier}} / {{supplier-address}} / {{client}}: the body here is already HTML
+      // (fetched straight from the open draft), so htmlMode=true converts the address's line
+      // breaks to <br> right at substitution time.
+      if (hasSupplierTag(subjectRaw) || hasSupplierTag(bodyRaw)) {
+        const resolved = await resolveSupplierTags({ subject: subjectRaw, body: bodyRaw }, true);
         if (resolved === null) {
           setStatus("Cancelled.");
           return;
         }
-        subjectRaw = resolved.subjectRaw;
-        bodyRaw = resolved.bodyRaw;
+        subjectRaw = resolved.subject;
+        bodyRaw = resolved.body;
       }
 
       subjectRaw = await resolveQuestionTagsInText(subjectRaw);
@@ -3230,7 +3306,8 @@
     reader.readAsText(file);
   }
 
-  // ===== Clients (name + free-text address, used by the {{client}} tag) =====
+  // ===== Suppliers (formerly "Clients"): name, group, email address(es), postal address —
+  // used by the {{supplier}} tags. Same storage key as before, so existing entries are kept.
   // Local storage only, same reasoning as the Directory: isolated from templates'
   // synced RoamingSettings budget, so neither can ever drag the other down.
 
@@ -3299,12 +3376,12 @@
     if (clientSearch) {
       const q = clientSearch.toLowerCase();
       visible = visible.filter((c) =>
-        c.name.toLowerCase().includes(q) || (c.address || "").toLowerCase().includes(q) || (c.group || "").toLowerCase().includes(q)
+        c.name.toLowerCase().includes(q) || (c.address || "").toLowerCase().includes(q) || (c.group || "").toLowerCase().includes(q) || (c.emails || "").toLowerCase().includes(q)
       );
     }
 
     if (visible.length === 0) {
-      empty.textContent = clients.length === 0 ? 'No clients yet. Click "+ New" to add one.' : "No clients match your search.";
+      empty.textContent = clients.length === 0 ? 'No suppliers yet. Click "+ New" to add one.' : "No suppliers match your search.";
       empty.classList.remove("hidden");
       return;
     }
@@ -3343,7 +3420,9 @@
           <p class="template-preview"></p>
         `;
         card.querySelector(".template-name").textContent = c.name;
-        card.querySelector(".template-preview").textContent = c.address || "";
+        const emails = supplierEmails(c);
+        card.querySelector(".template-preview").textContent =
+          [emails.length ? "✉ " + emails.join(", ") : "✉ no email address", (c.address || "").replace(/\s*\n+\s*/g, ", ")].filter(Boolean).join(" · ");
         card.querySelector(".btn-edit").addEventListener("click", () => openClientForm(c));
         card.querySelector(".btn-delete").addEventListener("click", () => deleteClient(c.id));
         list.appendChild(card);
@@ -3358,6 +3437,7 @@
     document.getElementById("cName").value = c ? c.name : "";
     document.getElementById("cGroup").value = c ? (c.group || "") : "";
     document.getElementById("cAddress").value = c ? (c.address || "") : "";
+    document.getElementById("cEmails").value = c ? supplierEmails(c).join("\n") : "";
     refreshClientGroupDatalist();
     document.getElementById("clientForm").classList.remove("hidden");
     document.getElementById("cName").focus();
@@ -3368,11 +3448,12 @@
   }
   function saveClientForm() {
     const name = document.getElementById("cName").value.trim();
-    if (!name) { setStatus("Give this client a name.", true); return; }
+    if (!name) { setStatus("Give this supplier a name.", true); return; }
     const entry = {
       id: clientEditingId || Date.now().toString(),
       name,
       group: document.getElementById("cGroup").value.trim(),
+      emails: supplierEmails({ emails: document.getElementById("cEmails").value }).join("\n"),
       address: document.getElementById("cAddress").value.trim()
     };
     if (clientEditingId) {
@@ -3384,21 +3465,21 @@
     saveClients();
     renderClients();
     closeClientForm();
-    setStatus("Client saved.");
+    setStatus("Supplier saved.");
   }
   function deleteClient(id) {
     clients = clients.filter((c) => c.id !== id);
     saveClients();
     renderClients();
-    setStatus("Client deleted.");
+    setStatus("Supplier deleted.");
   }
 
   function exportClients() {
-    if (clients.length === 0) { setStatus("No clients to export.", true); return; }
+    if (clients.length === 0) { setStatus("No suppliers to export.", true); return; }
     const payload = { exportedAt: new Date().toISOString(), clients };
     const date = new Date().toISOString().slice(0, 10);
-    downloadTextFile(`swift-compose-clients-${date}.json`, JSON.stringify(payload, null, 2));
-    setStatus(`Exported ${clients.length} client(s).`);
+    downloadTextFile(`swift-compose-suppliers-${date}.json`, JSON.stringify(payload, null, 2));
+    setStatus(`Exported ${clients.length} supplier(s).`);
     markExported();
   }
 
@@ -3412,12 +3493,12 @@
         let added = 0;
         incoming.forEach((raw) => {
           if (!raw || !raw.name) return;
-          clients.push({ id: (Date.now() + added).toString(), name: raw.name, group: raw.group || "", address: raw.address || "" });
+          clients.push({ id: (Date.now() + added).toString(), name: raw.name, group: raw.group || "", emails: supplierEmails(raw).join("\n"), address: raw.address || "" });
           added++;
         });
         saveClients();
         renderClients();
-        setStatus(`Imported ${added} client(s).`);
+        setStatus(`Imported ${added} supplier(s).`);
       } catch (e) {
         setStatus("Import failed: " + e.message, true);
       }
@@ -3426,8 +3507,8 @@
     reader.readAsText(file);
   }
 
-  // Opens a "Select a client" modal and resolves with the chosen client's address,
-  // or null if cancelled.
+  // Opens a "Select a supplier" modal and resolves with the chosen supplier (whole entry:
+  // name, emails, address), or null if cancelled.
   // groupFilter: if given, only clients in that group are offered and the search box is
   // hidden (a filtered list is already short enough not to need it).
   function promptForClientSelection(groupFilter) {
@@ -3436,8 +3517,8 @@
       if (pool.length === 0) {
         setStatus(
           groupFilter
-            ? `No clients in group "${groupFilter}" — check the group name or add one in the Clients tab.`
-            : "No clients defined yet — add one in the Clients tab.",
+            ? `No suppliers in group "${groupFilter}" — check the group name or add one in the Suppliers tab.`
+            : "No suppliers defined yet — add one in the Suppliers tab.",
           true
         );
         resolve(null);
@@ -3449,7 +3530,7 @@
       const list = document.getElementById("clientModalList");
       const cancelBtn = document.getElementById("clientModalCancel");
 
-      title.textContent = groupFilter ? `Select a client — ${groupFilter}` : "Select a client";
+      title.textContent = groupFilter ? `Select a supplier — ${groupFilter}` : "Select a supplier";
       search.value = "";
       search.classList.toggle("hidden", !!groupFilter);
       overlay.classList.remove("hidden");
@@ -3461,14 +3542,18 @@
           const q = query.toLowerCase();
           opts = opts.filter((c) => c.name.toLowerCase().includes(q));
         }
-        list.innerHTML = opts.map((c) =>
-          `<div class="tag-menu-item" data-client-id="${c.id}"><span>${c.name}</span></div>`
-        ).join("") || `<div style="font-size:11.5px; color: var(--ink-soft); padding: 6px 4px;">No matches.</div>`;
+        const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        list.innerHTML = opts.map((c) => {
+          const emails = supplierEmails(c);
+          return `<div class="tag-menu-item" data-client-id="${esc(c.id)}" style="flex-direction:column; align-items:flex-start; gap:1px;">` +
+            `<span>${esc(c.name)}</span>` +
+            `<span style="font-size:11px; color: var(--ink-soft);">${emails.length ? esc(emails.join(", ")) : "no email address saved"}</span></div>`;
+        }).join("") || `<div style="font-size:11.5px; color: var(--ink-soft); padding: 6px 4px;">No matches.</div>`;
         list.querySelectorAll("[data-client-id]").forEach((row) => {
           row.addEventListener("click", () => {
             const c = pool.find((x) => x.id === row.dataset.clientId);
             cleanup();
-            resolve(c ? c.address : null);
+            resolve(c || null);
           });
         });
       }
@@ -3906,6 +3991,8 @@
     const tagMenuQuestion = document.getElementById("tagMenuQuestion");
     const tagMenuClient = document.getElementById("tagMenuClient");
     let tagMenuTargetId = "fBody";
+    let tagMenuKind = "text"; // "recipients" for To / Cc / Bcc: only Supplier + Shortcuts make sense there
+    const RECIPIENT_MENU_ITEMS = ["tagItemClient", "tagItemShortcuts"];
 
     function closeTagMenu() {
       tagMenu.classList.add("hidden");
@@ -3923,6 +4010,10 @@
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
         tagMenuTargetId = btn.dataset.target;
+        tagMenuKind = btn.dataset.kind === "recipients" ? "recipients" : "text";
+        tagMenuList.querySelectorAll(".tag-menu-item").forEach((item) => {
+          item.classList.toggle("hidden", tagMenuKind === "recipients" && !RECIPIENT_MENU_ITEMS.includes(item.id));
+        });
         tagMenuDay.classList.add("hidden");
         tagMenuWeek.classList.add("hidden");
         tagMenuShortcuts.classList.add("hidden");
@@ -4050,9 +4141,13 @@
       closeTagMenu();
     });
 
-    // "Client" item: opens a sub-view to optionally restrict the picker to one group
+    // "Supplier" item: opens a sub-view to optionally restrict the picker to one group
+    // (and, in the subject/body, choose between the supplier's name and postal address)
     document.getElementById("tagItemClient").addEventListener("click", () => {
       document.getElementById("clientTagGroup").value = "";
+      document.getElementById("clientTagWhat").value = "name";
+      document.getElementById("clientTagWhatRow").classList.toggle("hidden", tagMenuKind === "recipients");
+      document.getElementById("clientTagRecipientsHint").classList.toggle("hidden", tagMenuKind !== "recipients");
       refreshClientGroupDatalist();
       tagMenuList.classList.add("hidden");
       tagMenuClient.classList.remove("hidden");
@@ -4064,7 +4159,8 @@
     });
     document.getElementById("clientTagInsert").addEventListener("click", () => {
       const group = document.getElementById("clientTagGroup").value.trim();
-      const tag = group ? `{{client:${group}}}` : "{{client}}";
+      const kind = tagMenuKind === "text" && document.getElementById("clientTagWhat").value === "address" ? "supplier-address" : "supplier";
+      const tag = group ? `{{${kind}:${group}}}` : `{{${kind}}}`;
       insertAtCursor(document.getElementById(tagMenuTargetId), tag);
       closeTagMenu();
     });
