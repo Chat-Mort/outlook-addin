@@ -1061,6 +1061,7 @@
     <tr><td><code>{{supplier}}</code> / <code>{{supplier:Group}}</code></td><td>Asks you to pick a supplier (optionally narrowed to one group). In To / Cc / Bcc: adds all its email addresses. In the subject / body: its name</td></tr>
     <tr><td><code>{{supplier-address}}</code> / <code>{{supplier-address:Group}}</code></td><td>Same pick, inserts the supplier's postal address (subject / body)</td></tr>
     <tr><td><code>##shortcut</code> in To / Cc / Bcc</td><td>Pulls the same field (To, Cc or Bcc) of the template that owns the shortcut</td></tr>
+    <tr><td><code>{{to:…}}</code> / <code>{{cc:…}}</code> / <code>{{bcc:…}}</code></td><td>For Outlook's own templates (their To field only takes real addresses): put it in the body, e.g. <code>{{to:supplier:Group}}</code>, <code>{{cc:##shortcut}}</code> or <code>{{bcc:a@b.com}}</code>. "Resolve ## shortcuts in this email" removes it and fills that field. A <code>##shortcut</code> in the body also adds its template's To / Cc / Bcc</td></tr>
     <tr><td><code>{{q:Question}}</code></td><td>Asks a custom question, inserts the typed answer (each occurrence asked separately)</td></tr>
   </table>
 
@@ -2868,6 +2869,60 @@
     }
   }
 
+  // ===== Recipients carried in the body =====
+  // Outlook's native templates only accept valid addresses in To/Cc/Bcc, so recipients can be
+  // carried in the body instead, then moved by "Resolve ## shortcuts in this email":
+  //  - a ##shortcut in the subject/body also adds the referenced template's To/Cc/Bcc;
+  //  - dedicated tags {{to:…}} / {{cc:…}} / {{bcc:…}} are removed from the text and their
+  //    content goes to that field: {{to:supplier}}, {{to:supplier:Group}}, {{cc:##shortcut}},
+  //    or plain addresses ({{bcc:archive@company.com}}).
+  const RECIPIENT_TAG_RE = /\{\{(to|cc|bcc):([^}]*)\}\}/gi;
+
+  function decodeHtmlText(v) {
+    const ta = document.createElement("textarea");
+    ta.innerHTML = v;
+    return ta.value;
+  }
+
+  // Returns the text without the {{to:…}}/{{cc:…}}/{{bcc:…}} tags, and their content per field
+  // (supplier picks turned back into {{supplier…}} tags, ##shortcuts resolved field-wise).
+  function extractRecipientTags(text) {
+    const found = { to: [], cc: [], bcc: [] };
+    const MARK = "\u2063RCPT\u2063";
+    const stripped = (text || "").replace(RECIPIENT_TAG_RE, (m, field, value) => {
+      const f = field.toLowerCase();
+      const v = decodeHtmlText(value).trim();
+      if (!v) return "";
+      const sup = v.match(/^supplier(?::(.*))?$/i);
+      if (sup) found[f].push(sup[1] && sup[1].trim() ? `{{supplier:${sup[1].trim()}}}` : "{{supplier}}");
+      else found[f].push(resolveShortcuts(v, undefined, false, f));
+      return MARK;
+    })
+      // a line (paragraph / div) that only held recipient tags disappears entirely;
+      // blank lines you added yourself are left alone
+      .replace(new RegExp("<(p|div)\\b[^>]*>(?:\\s|&nbsp;|<\\/?span[^>]*>|<br\\s*\\/?>|" + MARK + ")*<\\/\\1>", "gi"), (m) => (m.includes(MARK) ? "" : m))
+      .replaceAll(MARK, "");
+    return { text: stripped, found };
+  }
+
+  // To/Cc/Bcc of every template referenced by a ##shortcut in the text (each once).
+  function collectShortcutRecipients(text) {
+    const found = { to: [], cc: [], bcc: [] };
+    const seen = new Set();
+    for (const m of (text || "").matchAll(/##(\w+)/g)) {
+      const key = m[1].toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const t = templates.find((x) => x.shortcut && x.shortcut === key);
+      if (!t) continue;
+      ["to", "cc", "bcc"].forEach((f) => {
+        const v = resolveShortcuts(t[f] || "", undefined, false, f).trim();
+        if (v) found[f].push(v);
+      });
+    }
+    return found;
+  }
+
   async function resolveShortcutsInCurrentEmail() {
     const item = Office.context.mailbox.item;
 
@@ -2899,8 +2954,17 @@
     try {
       const [originalSubject, originalBody] = await Promise.all([getSubject(), getBody()]);
 
-      let subjectRaw = resolveShortcuts(originalSubject, undefined, false, "subject");
-      let bodyRaw = resolveShortcuts(originalBody, undefined, true, "body");
+      // Recipients first, before the ##shortcuts get replaced by their text
+      const subjectTags = extractRecipientTags(originalSubject);
+      const bodyTags = extractRecipientTags(originalBody);
+      const fromShortcuts = collectShortcutRecipients(subjectTags.text + "\n" + bodyTags.text);
+      const recipientRaw = {};
+      ["to", "cc", "bcc"].forEach((f) => {
+        recipientRaw[f] = [...subjectTags.found[f], ...bodyTags.found[f], ...fromShortcuts[f]].join("; ");
+      });
+
+      let subjectRaw = resolveShortcuts(subjectTags.text, undefined, false, "subject");
+      let bodyRaw = resolveShortcuts(bodyTags.text, undefined, true, "body");
 
       if (subjectRaw.includes("{{c}}") || bodyRaw.includes("{{c}}")) {
         const chosen = await promptForCalendarDate();
@@ -2925,14 +2989,17 @@
       // {{supplier}} / {{supplier-address}} / {{client}}: the body here is already HTML
       // (fetched straight from the open draft), so htmlMode=true converts the address's line
       // breaks to <br> right at substitution time.
-      if (hasSupplierTag(subjectRaw) || hasSupplierTag(bodyRaw)) {
-        const resolved = await resolveSupplierTags({ subject: subjectRaw, body: bodyRaw }, true);
+      if ([subjectRaw, bodyRaw, recipientRaw.to, recipientRaw.cc, recipientRaw.bcc].some(hasSupplierTag)) {
+        const resolved = await resolveSupplierTags({ subject: subjectRaw, body: bodyRaw, to: recipientRaw.to, cc: recipientRaw.cc, bcc: recipientRaw.bcc }, true);
         if (resolved === null) {
           setStatus("Cancelled.");
           return;
         }
         subjectRaw = resolved.subject;
         bodyRaw = resolved.body;
+        recipientRaw.to = resolved.to;
+        recipientRaw.cc = resolved.cc;
+        recipientRaw.bcc = resolved.bcc;
       }
 
       subjectRaw = await resolveQuestionTagsInText(subjectRaw);
@@ -2958,6 +3025,43 @@
       if (subjectChanged) await setSubject(updatedSubject);
       if (bodyChanged) await setBody(updatedBody);
 
+      // Recipients: added to what's already in the draft (no duplicates)
+      const getRecipients = (field) => new Promise((resolve) => {
+        if (!item[field] || !item[field].getAsync) return resolve([]);
+        item[field].getAsync((res) => resolve(res.status === Office.AsyncResultStatus.Succeeded ? (res.value || []) : []));
+      });
+      const addRecipients = (field, list) => new Promise((resolve, reject) => {
+        item[field].addAsync(list, (res) => {
+          if (res.status === Office.AsyncResultStatus.Succeeded) resolve();
+          else reject(res.error);
+        });
+      });
+      const setRecipients = (field, list) => new Promise((resolve, reject) => {
+        item[field].setAsync(list, (res) => {
+          if (res.status === Office.AsyncResultStatus.Succeeded) resolve();
+          else reject(res.error);
+        });
+      });
+      const originalRecipients = {};
+      let recipientsAdded = 0;
+      for (const f of ["to", "cc", "bcc"]) {
+        const wanted = parseRecipients(recipientRaw[f]);
+        if (wanted.length === 0) continue;
+        const existing = await getRecipients(f);
+        originalRecipients[f] = existing;
+        const have = new Set(existing.map((r) => String(r.emailAddress || r).toLowerCase()));
+        const toAdd = [];
+        wanted.forEach((a) => {
+          const k = a.toLowerCase();
+          if (!have.has(k)) { have.add(k); toAdd.push(a); }
+        });
+        if (toAdd.length > 0) {
+          await addRecipients(f, toAdd);
+          recipientsAdded += toAdd.length;
+        }
+      }
+      const recipientsChanged = recipientsAdded > 0;
+
       // Referenced templates' attachments: "final" ones are attached directly, blank
       // placeholders get the download/import reminder instead.
       const attachOne = (a) => new Promise((resolve, reject) => {
@@ -2975,7 +3079,8 @@
       }
 
       const parts = [];
-      parts.push(subjectChanged || bodyChanged ? "Shortcuts resolved" : "No ##shortcut found in this email");
+      parts.push(subjectChanged || bodyChanged || recipientsChanged ? "Shortcuts resolved" : "No ##shortcut found in this email");
+      if (recipientsChanged) parts.push(`${recipientsAdded} recipient(s) added`);
       if (finalAttachments.length > 0) parts.push(`${finalAttachments.length} attachment(s) added`);
 
       // Anything still shaped like "##word" after resolution didn't match a known shortcut —
@@ -2986,12 +3091,13 @@
         message += ` ⚠ Unmatched: ${leftover.map((k) => "##" + k).join(", ")} — check spelling.`;
       }
 
-      if (subjectChanged || bodyChanged) {
-        // Undo restores the subject/body text only — any attachments just added stay
-        // attached (Office.js has no clean way to detach them programmatically here).
+      if (subjectChanged || bodyChanged || recipientsChanged) {
+        // Undo restores the subject/body text and the recipients — any attachments just added
+        // stay attached (Office.js has no clean way to detach them programmatically here).
         setUndoableStatus(message, async () => {
           if (subjectChanged) await setSubject(originalSubject);
           if (bodyChanged) await setBody(originalBody);
+          for (const f of Object.keys(originalRecipients)) await setRecipients(f, originalRecipients[f]);
           setStatus("Reverted.");
         });
       } else {

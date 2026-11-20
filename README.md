@@ -56,6 +56,7 @@ Don't want to remember the syntax? There's a ⚡ button next to the subject and 
 - Address book for suppliers (formerly "Clients", same data): name, optional group, one or more email addresses, optional multi-line postal address. This is what `{{supplier}}` pulls from.
 - The ⚡ button next to To / Cc / Bcc offers Supplier and Shortcuts. With `{{supplier:Group}}` in To, every new email asks you to pick one supplier from that group and adds all of its email addresses.
 - One pick per group for the whole email. Older templates using `{{client}}` keep working (postal address in the body, email addresses in To / Cc / Bcc).
+- Outlook's own templates only accept real addresses in To / Cc / Bcc, so recipients can ride in the body instead: a `##shortcut` in the body also adds its template's To / Cc / Bcc, and `{{to:supplier:Group}}`, `{{cc:##shortcut}}`, `{{bcc:a@b.com}}` are removed from the body and put in that field. Both happen when you click "Resolve ## shortcuts in this email" (undo restores the recipients too).
 - Grouped and collapsible, with export / import too.
 
 ### Codes
