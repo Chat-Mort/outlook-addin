@@ -3424,6 +3424,19 @@
     } catch (e) {
       clients = [];
     }
+    if (!Array.isArray(clients)) clients = [];
+    clients = clients.filter((c) => c && typeof c === "object");
+    // Every entry needs a unique string id (edit / delete / pick all rely on it). Entries
+    // saved by older versions can lack one or share one: repair them once and save.
+    const seenIds = new Set();
+    let repaired = false;
+    clients.forEach((c, i) => {
+      let id = c.id !== undefined && c.id !== null ? String(c.id) : "";
+      if (!id || seenIds.has(id)) id = Date.now().toString() + "-" + i;
+      if (c.id !== id) { c.id = id; repaired = true; }
+      seenIds.add(id);
+    });
+    if (repaired) saveClients();
   }
 
   function saveClients() {
@@ -3642,22 +3655,24 @@
       overlay.classList.remove("hidden");
       if (!groupFilter) search.focus();
 
+      let shown = []; // the rows currently displayed, so a click maps to its row by position
       function renderOptions(query) {
         let opts = pool.slice().sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
         if (query) {
           const q = query.toLowerCase();
           opts = opts.filter((c) => c.name.toLowerCase().includes(q));
         }
+        shown = opts;
         const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-        list.innerHTML = opts.map((c) => {
+        list.innerHTML = opts.map((c, i) => {
           const emails = supplierEmails(c);
-          return `<div class="tag-menu-item" data-client-id="${esc(c.id)}" style="flex-direction:column; align-items:flex-start; gap:1px;">` +
+          return `<div class="tag-menu-item" data-idx="${i}" style="flex-direction:column; align-items:flex-start; gap:1px;">` +
             `<span>${esc(c.name)}</span>` +
             `<span style="font-size:11px; color: var(--ink-soft);">${emails.length ? esc(emails.join(", ")) : "no email address saved"}</span></div>`;
         }).join("") || `<div style="font-size:11.5px; color: var(--ink-soft); padding: 6px 4px;">No matches.</div>`;
-        list.querySelectorAll("[data-client-id]").forEach((row) => {
+        list.querySelectorAll("[data-idx]").forEach((row) => {
           row.addEventListener("click", () => {
-            const c = pool.find((x) => x.id === row.dataset.clientId);
+            const c = shown[Number(row.dataset.idx)];
             cleanup();
             resolve(c || null);
           });
